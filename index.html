@@ -1049,47 +1049,67 @@
 
       <!-- Step 1: Willkommen -->
       <div class="ob-step" data-step="0">
-        <div style="text-align:center;margin-bottom:32px">
-          <div style="font-size:4rem;margin-bottom:16px">👋</div>
-          <h2 style="font-size:1.8rem;font-weight:800;color:var(--text);letter-spacing:-0.5px;margin-bottom:12px">Willkommen bei BauPlan!</h2>
-          <p style="color:var(--text2);line-height:1.7;font-size:0.92rem">Dein smarter Begleiter für Bauprojekte. Budgets, Kosten, Tagebuch, Dokumentation und KI-Bauberatung – alles an einem Ort.</p>
+        <div style="text-align:center;margin-bottom:28px">
+          <div style="font-size:3.5rem;margin-bottom:14px">👋</div>
+          <h2 style="font-size:1.7rem;font-weight:800;color:var(--text);letter-spacing:-0.5px;margin-bottom:10px">Willkommen bei BauPlan!</h2>
+          <p style="color:var(--text2);line-height:1.65;font-size:0.9rem">Dein smarter Begleiter für Bauprojekte. Budgets, Kosten, Tagebuch, Dokumentation und KI-Bauberatung – alles an einem Ort.</p>
         </div>
-        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:32px">
-          ${[['💶','Kosten & Budget verwalten','Rechnungen scannen, Budgets planen'],
-             ['🤖','KI-Bauberater','Automatische Analyse & Warnungen'],
-             ['📓','Bautagebuch','Fortschritt dokumentieren'],
-             ['🔧','Wartungsplan','Nie wieder einen Termin vergessen']
-            ].map(([icon,title,sub])=>`
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
           <div style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:14px 16px;border:1.5px solid var(--border);box-shadow:var(--shadow)">
-            <span style="font-size:1.5rem;flex-shrink:0">${icon}</span>
-            <div><div style="font-weight:700;font-size:0.88rem;color:var(--text)">${title}</div><div style="font-size:0.78rem;color:var(--text3)">${sub}</div></div>
-          </div>`).join('')}
+            <span style="font-size:1.4rem;flex-shrink:0">💶</span>
+            <div><div style="font-weight:700;font-size:0.88rem;color:var(--text)">Kosten &amp; Budget verwalten</div><div style="font-size:0.76rem;color:var(--text3)">Rechnungen scannen, Budgets planen</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:14px 16px;border:1.5px solid var(--border);box-shadow:var(--shadow)">
+            <span style="font-size:1.4rem;flex-shrink:0">🤖</span>
+            <div><div style="font-weight:700;font-size:0.88rem;color:var(--text)">KI-Bauberater</div><div style="font-size:0.76rem;color:var(--text3)">Automatische Analyse &amp; Warnungen</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:14px 16px;border:1.5px solid var(--border);box-shadow:var(--shadow)">
+            <span style="font-size:1.4rem;flex-shrink:0">📓</span>
+            <div><div style="font-weight:700;font-size:0.88rem;color:var(--text)">Bautagebuch</div><div style="font-size:0.76rem;color:var(--text3)">Fortschritt dokumentieren &amp; Fotos ablegen</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:14px 16px;border:1.5px solid var(--border);box-shadow:var(--shadow)">
+            <span style="font-size:1.4rem;flex-shrink:0">🔧</span>
+            <div><div style="font-weight:700;font-size:0.88rem;color:var(--text)">Wartungsplan</div><div style="font-size:0.76rem;color:var(--text3)">Nie wieder einen Wartungstermin vergessen</div></div>
+          </div>
         </div>
       </div>
 
       <!-- Step 2: Projekttyp -->
       <div class="ob-step" data-step="1" style="display:none">
-        <h2 style="font-size:1.6rem;font-weight:800;color:var(--text);margin-bottom:8px">Was planst du?</h2>
-        <p style="color:var(--text3);margin-bottom:24px;font-size:0.88rem">Wähle die Art deines Projekts – du kannst das später ändern.</p>
+        <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px">Was planst du?</h2>
+        <p style="color:var(--text3);margin-bottom:20px;font-size:0.87rem">Wähle die Art deines Projekts – du kannst das später ändern.</p>
         <div style="display:flex;flex-direction:column;gap:10px" id="ob-type-picker">
-          ${[['🏠','Neubau','Haus oder Wohnung neu bauen'],
-             ['🔨','Umbau / Erweiterung','Bestehendes erweitern oder umbauen'],
-             ['🔧','Sanierung / Renovierung','Modernisieren und instand setzen'],
-             ['📋','Sonstiges','Anderes Bauprojekt']
-            ].map(([icon,label,sub],i)=>`
-          <div onclick="selectObType('${label}',this)"
-            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:16px;border:2px solid var(--border);cursor:pointer;transition:all 0.15s"
-            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--border)'">
-            <span style="font-size:1.6rem;flex-shrink:0">${icon}</span>
-            <div><div style="font-weight:700;color:var(--text)">${label}</div><div style="font-size:0.78rem;color:var(--text3)">${sub}</div></div>
-          </div>`).join('')}
+          <div onclick="selectObType('Neubau',this)"
+            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:15px 16px;border:2px solid var(--accent);background:var(--accent-light);cursor:pointer;transition:all 0.15s"
+            class="ob-selected">
+            <span style="font-size:1.5rem;flex-shrink:0">🏠</span>
+            <div><div style="font-weight:700;color:var(--text)">Neubau</div><div style="font-size:0.76rem;color:var(--text3)">Haus oder Wohnung neu bauen</div></div>
+          </div>
+          <div onclick="selectObType('Umbau / Erweiterung',this)"
+            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:15px 16px;border:2px solid var(--border);cursor:pointer;transition:all 0.15s"
+            onmouseover="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--accent)'" onmouseout="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--border)'">
+            <span style="font-size:1.5rem;flex-shrink:0">🔨</span>
+            <div><div style="font-weight:700;color:var(--text)">Umbau / Erweiterung</div><div style="font-size:0.76rem;color:var(--text3)">Bestehendes erweitern oder umbauen</div></div>
+          </div>
+          <div onclick="selectObType('Sanierung / Renovierung',this)"
+            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:15px 16px;border:2px solid var(--border);cursor:pointer;transition:all 0.15s"
+            onmouseover="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--accent)'" onmouseout="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--border)'">
+            <span style="font-size:1.5rem;flex-shrink:0">🔧</span>
+            <div><div style="font-weight:700;color:var(--text)">Sanierung / Renovierung</div><div style="font-size:0.76rem;color:var(--text3)">Modernisieren und instand setzen</div></div>
+          </div>
+          <div onclick="selectObType('Sonstiges',this)"
+            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:15px 16px;border:2px solid var(--border);cursor:pointer;transition:all 0.15s"
+            onmouseover="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--accent)'" onmouseout="if(!this.classList.contains('ob-selected'))this.style.borderColor='var(--border)'">
+            <span style="font-size:1.5rem;flex-shrink:0">📋</span>
+            <div><div style="font-weight:700;color:var(--text)">Sonstiges</div><div style="font-size:0.76rem;color:var(--text3)">Anderes Bauprojekt</div></div>
+          </div>
         </div>
       </div>
 
       <!-- Step 3: Projektdetails -->
       <div class="ob-step" data-step="2" style="display:none">
-        <h2 style="font-size:1.6rem;font-weight:800;color:var(--text);margin-bottom:8px">Dein Projekt</h2>
-        <p style="color:var(--text3);margin-bottom:24px;font-size:0.88rem">Grundlegende Infos – alles kann später bearbeitet werden.</p>
+        <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px">Dein Projekt</h2>
+        <p style="color:var(--text3);margin-bottom:20px;font-size:0.87rem">Grundlegende Infos – alles kann später in den Einstellungen geändert werden.</p>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div class="form-row"><label>Projektname *</label><input type="text" id="ob-name" placeholder="z.B. Einfamilienhaus Musterhausen"></div>
           <div class="form-row"><label>Adresse / Ort</label><input type="text" id="ob-address" placeholder="Musterstraße 1, 5201 Seekirchen"></div>
@@ -1099,15 +1119,15 @@
           </div>
           <div class="form-row">
             <label>Projektfarbe</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="ob-color-picker"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="ob-color-picker"></div>
           </div>
         </div>
       </div>
 
       <!-- Step 4: Module -->
       <div class="ob-step" data-step="3" style="display:none">
-        <h2 style="font-size:1.6rem;font-weight:800;color:var(--text);margin-bottom:8px">Welche Module brauchst du?</h2>
-        <p style="color:var(--text3);margin-bottom:20px;font-size:0.88rem">Deaktiviere was du nicht benötigst – du kannst alles jederzeit in den Einstellungen ändern.</p>
+        <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px">Welche Module brauchst du?</h2>
+        <p style="color:var(--text3);margin-bottom:16px;font-size:0.87rem">Deaktiviere was du nicht benötigst – jederzeit in den Einstellungen änderbar.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="ob-module-grid"></div>
       </div>
 
@@ -2166,6 +2186,11 @@ function saveAll() {
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
   localStorage.setItem('bauplan_projects', JSON.stringify(projects));
   localStorage.setItem('bauplan_current', String(currentProjectId));
+  // Cloud sync debounced
+  if (currentUser) {
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(syncToCloud, 2000);
+  }
 }
 
 function save() { saveAll(); }
@@ -4585,25 +4610,31 @@ async function onAuthSuccess(user, isNewUser = false) {
 async function syncToCloud() {
   if (!currentUser) return;
   try {
-    // Sync active state back
     const idx = projects.findIndex(p => p.id === currentProjectId);
     if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
 
-    const { error } = await supa.from('projektdaten').upsert({
+    const payload = {
       user_id: currentUser.id,
-      projekt_id: 1, // we use a single JSON blob approach
       typ: 'all_projects',
       daten: { projects, currentProjectId },
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,typ' });
+    };
 
-    if (!error) {
-      // Also keep local backup
-      localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-      localStorage.setItem('bauplan_current', String(currentProjectId));
+    // Try update first, then insert
+    const { data: existing } = await supa.from('projektdaten')
+      .select('id').eq('user_id', currentUser.id).maybeSingle();
+
+    if (existing) {
+      await supa.from('projektdaten').update({
+        daten: payload.daten, updated_at: payload.updated_at
+      }).eq('user_id', currentUser.id);
+    } else {
+      await supa.from('projektdaten').insert(payload);
     }
+    localStorage.setItem('bauplan_projects', JSON.stringify(projects));
+    localStorage.setItem('bauplan_current', String(currentProjectId));
   } catch(e) {
-    // Silently fail, local storage is backup
+    console.log('Sync (non-critical):', e.message);
   }
 }
 
@@ -4628,16 +4659,6 @@ async function loadFromCloud() {
 
   // Fallback to localStorage
   loadAll();
-}
-
-// Debounced auto-sync – saves 2 seconds after last change
-const origSave = save;
-function save() {
-  origSave();
-  if (currentUser) {
-    clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(syncToCloud, 2000);
-  }
 }
 
 // ── ONBOARDING ──────────────────────────────────
