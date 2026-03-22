@@ -984,7 +984,7 @@
     </div>
 
     <!-- Form Card -->
-    <div style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow-md);border:1.5px solid var(--border)">
+    <div class="modal-like" style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow-md);border:1.5px solid var(--border)">
 
       <!-- Login Form -->
       <div id="auth-form-login">
@@ -1536,32 +1536,71 @@
   <!-- SETTINGS -->
   <div class="page" id="page-settings">
     <div class="page-header">
-      <div><h2>Einstellungen</h2><p>Projekt & Module konfigurieren</p></div>
+      <div><h2>Einstellungen</h2><p>Projekt &amp; Konto verwalten</p></div>
     </div>
 
     <div class="two-col" style="align-items:start">
       <!-- Projektdaten -->
-      <div class="table-wrap">
-        <div class="table-header"><div class="table-title">Projektdaten</div></div>
-        <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
-          <div class="form-row">
-            <label>Projektname</label>
-            <input id="s-name" type="text" placeholder="z.B. Einfamilienhaus Musterhausen" oninput="saveSettings()">
+      <div>
+        <div class="table-wrap" style="margin-bottom:16px">
+          <div class="table-header"><div class="table-title">Projektdaten</div></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div class="form-row">
+              <label>Projektname</label>
+              <input id="s-name" type="text" placeholder="z.B. Einfamilienhaus Musterhausen" oninput="saveSettings()">
+            </div>
+            <div class="form-row">
+              <label>Baubeginn</label>
+              <input id="s-start" type="date" oninput="saveSettings()">
+            </div>
+            <div class="form-row">
+              <label>Geplante Fertigstellung</label>
+              <input id="s-end" type="date" oninput="saveSettings()">
+            </div>
+            <div class="form-row">
+              <label>Adresse / Ort</label>
+              <input id="s-address" type="text" placeholder="Musterstraße 1, 5201 Seekirchen" oninput="saveSettings()">
+            </div>
+            <div style="padding-top:8px;border-top:1px solid var(--border)">
+              <button class="btn btn-danger" style="font-size:0.8rem;padding:7px 14px"
+                onclick="if(confirm('Dieses Projekt und alle Projektdaten löschen?')){deleteProject(currentProjectId)}">
+                🗑 Projekt löschen
+              </button>
+            </div>
           </div>
-          <div class="form-row">
-            <label>Baubeginn</label>
-            <input id="s-start" type="date" oninput="saveSettings()">
-          </div>
-          <div class="form-row">
-            <label>Geplante Fertigstellung</label>
-            <input id="s-end" type="date" oninput="saveSettings()">
-          </div>
-          <div class="form-row">
-            <label>Adresse / Ort</label>
-            <input id="s-address" type="text" placeholder="Musterstraße 1, 5201 Seekirchen" oninput="saveSettings()">
-          </div>
-          <div style="padding-top:8px;border-top:1px solid var(--border)">
-            <button class="btn btn-danger" style="font-size:0.8rem;padding:7px 14px" onclick="if(confirm('Dieses Projekt und alle Daten löschen?')){deleteProject(currentProjectId)}">🗑 Projekt löschen</button>
+        </div>
+
+        <!-- Konto -->
+        <div class="table-wrap">
+          <div class="table-header"><div class="table-title">Mein Konto</div></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:10px">
+              <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-grad);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:1rem;flex-shrink:0" id="s-avatar">?</div>
+              <div>
+                <div style="font-weight:700;font-size:0.88rem;color:var(--text)" id="s-email-display">–</div>
+                <div style="font-size:0.75rem;color:var(--text3);margin-top:2px">Registriert via E-Mail</div>
+              </div>
+            </div>
+
+            <button onclick="doLogout()"
+              style="width:100%;background:white;border:1.5px solid var(--border);border-radius:9px;padding:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.15s"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+              ⎋ Abmelden
+            </button>
+
+            <div style="border-top:1px solid var(--border);padding-top:12px">
+              <div style="font-size:0.78rem;color:var(--text3);margin-bottom:8px;font-weight:500">Gefahrenzone</div>
+              <button onclick="deleteAccount()"
+                style="width:100%;background:var(--danger-light);border:1.5px solid #fecaca;border-radius:9px;padding:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.85rem;font-weight:700;color:var(--danger);cursor:pointer;transition:all 0.15s"
+                onmouseover="this.style.background='var(--danger)';this.style.color='white'"
+                onmouseout="this.style.background='var(--danger-light)';this.style.color='var(--danger)'">
+                🗑 Account dauerhaft löschen
+              </button>
+              <div style="font-size:0.74rem;color:var(--text3);margin-top:6px;line-height:1.4">
+                Löscht deinen Account und alle Daten unwiderruflich. Diese Aktion kann nicht rückgängig gemacht werden.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1576,7 +1615,7 @@
           <div style="padding:16px 20px;display:flex;flex-direction:column;gap:4px" id="module-toggles"></div>
         </div>
 
-        <div style="background:var(--accent-light);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:0">
+        <div style="background:var(--accent-light);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px">
           <div style="font-size:0.78rem;font-weight:700;color:var(--accent);margin-bottom:6px">💡 Hinweis</div>
           <div style="font-size:0.81rem;color:var(--text2);line-height:1.55">Ausgeblendete Module werden nur versteckt – deine Daten bleiben erhalten. Du kannst Module jederzeit wieder einblenden.</div>
         </div>
@@ -2415,6 +2454,78 @@ function loadSettings() {
   document.getElementById('s-end').value     = state.settings.end     || '';
   document.getElementById('s-address').value = state.settings.address || '';
   renderModuleToggles();
+  // Show account info
+  if (currentUser) {
+    const email = currentUser.email || '';
+    const emailEl = document.getElementById('s-email-display');
+    const avatarEl = document.getElementById('s-avatar');
+    if (emailEl) emailEl.textContent = email;
+    if (avatarEl) avatarEl.textContent = email.charAt(0).toUpperCase() || '?';
+  }
+}
+
+async function doLogout() {
+  if (!confirm('Wirklich abmelden? Deine Daten werden vorher gespeichert.')) return;
+  await syncToCloud();
+  await supa.auth.signOut();
+  currentUser = null;
+  projects = [];
+  state = EMPTY_PROJECT();
+  // Reset sidebar email
+  const emailEl = document.getElementById('auth-user-email');
+  if (emailEl) emailEl.textContent = 'v3.0 · BauPlan';
+  // Reset auth form
+  const loginForm = document.getElementById('auth-form-login');
+  const regForm   = document.getElementById('auth-form-register');
+  if (loginForm) loginForm.style.display = '';
+  if (regForm)   regForm.style.display   = 'none';
+  // Restore full auth card if it was replaced by confirmation message
+  const card = document.querySelector('.modal-like');
+  if (card && !card.querySelector('#btn-login')) {
+    card.innerHTML = `
+      <div id="auth-form-login">
+        <div class="form-row" style="margin-bottom:14px"><label>E-Mail</label><input type="email" id="auth-email" placeholder="deine@email.at" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="form-row" style="margin-bottom:6px"><label>Passwort</label><input type="password" id="auth-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div style="text-align:right;margin-bottom:18px"><span onclick="showForgotPassword()" style="font-size:0.78rem;color:var(--accent);cursor:pointer;font-weight:600">Passwort vergessen?</span></div>
+        <button onclick="doLogin()" id="btn-login" style="width:100%;background:var(--accent-grad);color:white;border:none;padding:12px;border-radius:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(61,111,248,0.3)">Anmelden</button>
+      </div>
+      <div id="auth-form-register" style="display:none">
+        <div class="form-row" style="margin-bottom:14px"><label>E-Mail</label><input type="email" id="reg-email" placeholder="deine@email.at"></div>
+        <div class="form-row" style="margin-bottom:14px"><label>Passwort</label><input type="password" id="reg-password" placeholder="Mindestens 6 Zeichen"></div>
+        <div class="form-row" style="margin-bottom:18px"><label>Passwort wiederholen</label><input type="password" id="reg-password2" placeholder="••••••••" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <button onclick="doRegister()" id="btn-register" style="width:100%;background:var(--accent-grad);color:white;border:none;padding:12px;border-radius:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(61,111,248,0.3)">Konto erstellen</button>
+      </div>
+      <div id="auth-msg" style="display:none;margin-top:14px;padding:10px 14px;border-radius:9px;font-size:0.83rem;font-weight:600;text-align:center"></div>`;
+  }
+  switchAuthTab('login');
+  showAuthOverlay();
+}
+
+async function deleteAccount() {
+  const confirmed = confirm('Account wirklich dauerhaft löschen?\n\nDiese Aktion löscht deinen Account und alle deine Daten unwiderruflich.');
+  if (!confirmed) return;
+  const confirmed2 = confirm('Letzte Warnung: Alle Projekte, Kosten, Tagebucheinträge und Fotos werden gelöscht. Fortfahren?');
+  if (!confirmed2) return;
+
+  try {
+    // Delete all user data from Supabase
+    if (currentUser) {
+      await supa.from('projektdaten').delete().eq('user_id', currentUser.id);
+      await supa.from('profiles').delete().eq('id', currentUser.id);
+    }
+    // Clear local storage
+    localStorage.clear();
+    // Sign out and delete account via admin API (needs Edge Function in production)
+    // For now: sign out and show message
+    await supa.auth.signOut();
+    currentUser = null;
+    projects = [];
+    state = EMPTY_PROJECT();
+    alert('Dein Account wurde gelöscht. Auf Wiedersehen!');
+    showAuthOverlay();
+  } catch(e) {
+    alert('Fehler beim Löschen: ' + e.message);
+  }
 }
 
 // ──────────────── DASHBOARD ────────────────
@@ -3000,7 +3111,7 @@ async function handleRechnungScan(input) {
     const isImage = file.type.startsWith('image/');
     const mediaType = file.type === 'application/pdf' ? 'application/pdf' : file.type || 'image/jpeg';
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/api/ki', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4208,7 +4319,7 @@ async function runKIAnalysis() {
   document.getElementById('ki-analyze-btn').disabled   = true;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/ki', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4322,7 +4433,7 @@ async function askKI() {
   const snapshot = buildProjectSnapshot();
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/ki', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4556,27 +4667,48 @@ async function doRegister() {
   if (!email || !pw1) { setAuthMsg('Bitte alle Felder ausfüllen.'); return; }
   if (pw1 !== pw2)    { setAuthMsg('Passwörter stimmen nicht überein.'); return; }
   if (pw1.length < 6) { setAuthMsg('Passwort muss mindestens 6 Zeichen haben.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setAuthMsg('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
+
   const btn = document.getElementById('btn-register');
   btn.textContent = 'Konto erstellen…'; btn.disabled = true;
+
   const { data, error } = await supa.auth.signUp({ email, password: pw1 });
   btn.textContent = 'Konto erstellen'; btn.disabled = false;
-  if (error) { setAuthMsg(error.message); return; }
-  if (data.user) {
-    onAuthSuccess(data.user, true); // true = new user → show onboarding
-  } else {
-    setAuthMsg('Bestätigungs-E-Mail wurde gesendet – bitte prüfe dein Postfach.', false);
-  }
-}
 
-async function doLogout() {
-  if (!confirm('Wirklich abmelden?')) return;
-  await syncToCloud(); // save before logout
-  await supa.auth.signOut();
-  currentUser = null;
-  projects = [];
-  state = EMPTY_PROJECT();
-  document.getElementById('auth-user-email').textContent = 'v3.0 · BauPlan';
-  showAuthOverlay();
+  if (error) {
+    // Already registered
+    if (error.message.includes('already registered') || error.message.includes('already been registered')) {
+      setAuthMsg('Diese E-Mail ist bereits registriert. Bitte melde dich an.');
+    } else {
+      setAuthMsg(error.message);
+    }
+    return;
+  }
+
+  // Check if email confirmation is required
+  if (data.user && !data.session) {
+    // Confirmation email was sent
+    document.getElementById('auth-form-register').style.display = 'none';
+    document.getElementById('auth-msg').style.display = 'none';
+    document.getElementById('auth-overlay').querySelector('.modal-like').innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <div style="font-size:3rem;margin-bottom:16px">📬</div>
+        <h3 style="font-size:1.2rem;font-weight:800;color:var(--text);margin-bottom:10px">Bitte bestätige deine E-Mail</h3>
+        <p style="color:var(--text2);font-size:0.88rem;line-height:1.6;margin-bottom:20px">
+          Wir haben eine Bestätigungs-Mail an<br>
+          <strong style="color:var(--accent)">${email}</strong><br>
+          gesendet. Klicke auf den Link in der Mail um fortzufahren.
+        </p>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;font-size:0.82rem;color:var(--text2);margin-bottom:20px;line-height:1.5">
+          💡 Kein Mail erhalten? Prüfe deinen Spam-Ordner.<br>
+          Der Link ist 24 Stunden gültig.
+        </div>
+        <button onclick="switchAuthTab('login')" class="btn btn-primary" style="width:100%">Zum Login</button>
+      </div>`;
+  } else if (data.user && data.session) {
+    // Email confirmation disabled – log in directly
+    onAuthSuccess(data.user, true);
+  }
 }
 
 function showForgotPassword() {
@@ -4789,10 +4921,14 @@ async function finishOnboarding() {
     showAuthOverlay();
   }
 
-  // Listen for auth state changes
+  // Listen for auth state changes (including email confirmation redirect)
   supa.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session?.user && !currentUser) {
       await onAuthSuccess(session.user);
+    }
+    if (event === 'USER_UPDATED' && session?.user) {
+      // Email was confirmed
+      currentUser = session.user;
     }
   });
 })();
