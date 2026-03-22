@@ -1124,8 +1124,67 @@
         </div>
       </div>
 
-      <!-- Step 4: Module -->
+      <!-- Step 4: Budget -->
       <div class="ob-step" data-step="3" style="display:none">
+        <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px">Dein Gesamtbudget</h2>
+        <p style="color:var(--text3);margin-bottom:20px;font-size:0.87rem">Gib dein geplantes Gesamtbudget ein und teile es auf Kategorien auf.</p>
+
+        <div class="form-row" style="margin-bottom:20px">
+          <label>Gesamtbudget (€) *</label>
+          <input type="number" id="ob-budget-total" placeholder="z.B. 350000" oninput="updateObBudgetSplit()" style="font-size:1.1rem;font-weight:700">
+        </div>
+
+        <div id="ob-budget-template-section">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Schnellaufteilung wählen:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px" id="ob-budget-templates">
+            <button type="button" onclick="applyObBudgetTemplate('neubau',this)"
+              style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--border);background:white;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text2)"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="if(!this.classList.contains('ob-tpl-active')){this.style.borderColor='var(--border)';this.style.color='var(--text2)'}">
+              🏠 Neubau
+            </button>
+            <button type="button" onclick="applyObBudgetTemplate('umbau',this)"
+              style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--border);background:white;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text2)"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="if(!this.classList.contains('ob-tpl-active')){this.style.borderColor='var(--border)';this.style.color='var(--text2)'}">
+              🔨 Umbau
+            </button>
+            <button type="button" onclick="applyObBudgetTemplate('sanierung',this)"
+              style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--border);background:white;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text2)"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="if(!this.classList.contains('ob-tpl-active')){this.style.borderColor='var(--border)';this.style.color='var(--text2)'}">
+              🔧 Sanierung
+            </button>
+            <button type="button" onclick="applyObBudgetTemplate('leer',this)"
+              style="padding:7px 14px;border-radius:8px;border:1.5px solid var(--border);background:white;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text2)"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="if(!this.classList.contains('ob-tpl-active')){this.style.borderColor='var(--border)';this.style.color='var(--text2)'}">
+              ✏️ Manuell
+            </button>
+          </div>
+        </div>
+
+        <!-- Kategorien-Aufteilung -->
+        <div id="ob-budget-cats" style="display:none">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Budgetaufteilung nach Kategorien:</div>
+
+          <!-- Visueller Balken -->
+          <div id="ob-split-bar" style="height:14px;border-radius:99px;overflow:hidden;display:flex;margin-bottom:8px;background:var(--surface3)"></div>
+          <div id="ob-split-remaining" style="font-size:0.8rem;font-weight:700;margin-bottom:16px"></div>
+
+          <div id="ob-cat-rows" style="display:flex;flex-direction:column;gap:8px"></div>
+
+          <button type="button" onclick="addObBudgetCat()"
+            style="margin-top:10px;width:100%;padding:8px;border-radius:9px;border:1.5px dashed var(--border);background:transparent;font-family:'Plus Jakarta Sans',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text3);cursor:pointer;transition:all 0.15s"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">
+            + Eigene Kategorie hinzufügen
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 5: Module -->
+      <div class="ob-step" data-step="4" style="display:none">
         <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px">Welche Module brauchst du?</h2>
         <p style="color:var(--text3);margin-bottom:16px;font-size:0.87rem">Deaktiviere was du nicht benötigst – jederzeit in den Einstellungen änderbar.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="ob-module-grid"></div>
@@ -4796,14 +4855,156 @@ async function loadFromCloud() {
 // ── ONBOARDING ──────────────────────────────────
 let obStep = 0;
 let obType = 'Neubau';
-const OB_TOTAL = 4;
+const OB_TOTAL = 5;
+
+// Budget templates: name, icon, color, percent
+const OB_BUDGET_TEMPLATES = {
+  neubau: [
+    { name: 'Grundstück & Aufschließung', icon: '🌍', pct: 20, color: '#3d6ff8' },
+    { name: 'Planung & Behörden',         icon: '📐', pct: 8,  color: '#7b5cfa' },
+    { name: 'Rohbau',                     icon: '🧱', pct: 25, color: '#0d9488' },
+    { name: 'Dach',                       icon: '🏠', pct: 8,  color: '#ea6c19' },
+    { name: 'Fenster & Türen',            icon: '🪟', pct: 7,  color: '#ef4444' },
+    { name: 'Elektro',                    icon: '⚡', pct: 5,  color: '#f59e0b' },
+    { name: 'Sanitär & Heizung',          icon: '🔥', pct: 8,  color: '#22c55e' },
+    { name: 'Innenausbau',                icon: '🏗️', pct: 10, color: '#e879f9' },
+    { name: 'Außenanlagen',               icon: '🌿', pct: 5,  color: '#06b6d4' },
+    { name: 'Reservepuffer',              icon: '🛡️', pct: 4,  color: '#64748b' },
+  ],
+  umbau: [
+    { name: 'Planung & Genehmigungen',    icon: '📐', pct: 8,  color: '#7b5cfa' },
+    { name: 'Abbruch & Rohbau',           icon: '🧱', pct: 20, color: '#0d9488' },
+    { name: 'Fenster & Türen',            icon: '🪟', pct: 10, color: '#ef4444' },
+    { name: 'Elektro',                    icon: '⚡', pct: 12, color: '#f59e0b' },
+    { name: 'Sanitär & Heizung',          icon: '🔥', pct: 15, color: '#22c55e' },
+    { name: 'Innenausbau & Böden',        icon: '🏗️', pct: 20, color: '#e879f9' },
+    { name: 'Malerarbeiten',              icon: '🖌️', pct: 7,  color: '#06b6d4' },
+    { name: 'Reservepuffer',              icon: '🛡️', pct: 8,  color: '#64748b' },
+  ],
+  sanierung: [
+    { name: 'Planung',                    icon: '📐', pct: 5,  color: '#7b5cfa' },
+    { name: 'Dach & Fassade',             icon: '🏠', pct: 20, color: '#ea6c19' },
+    { name: 'Fenster & Türen',            icon: '🪟', pct: 15, color: '#ef4444' },
+    { name: 'Heizung & Energie',          icon: '🔥', pct: 18, color: '#22c55e' },
+    { name: 'Elektro',                    icon: '⚡', pct: 10, color: '#f59e0b' },
+    { name: 'Bad & Sanitär',              icon: '💧', pct: 12, color: '#3d6ff8' },
+    { name: 'Böden & Innenausbau',        icon: '🪵', pct: 12, color: '#e879f9' },
+    { name: 'Reservepuffer',              icon: '🛡️', pct: 8,  color: '#64748b' },
+  ],
+  leer: []
+};
+
+let obBudgetCats = []; // { name, icon, color, betrag }
+
+function applyObBudgetTemplate(key, btn) {
+  // Update button styles
+  document.querySelectorAll('#ob-budget-templates button').forEach(b => {
+    b.classList.remove('ob-tpl-active');
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text2)';
+    b.style.background = 'white';
+  });
+  btn.classList.add('ob-tpl-active');
+  btn.style.borderColor = 'var(--accent)';
+  btn.style.color = 'var(--accent)';
+  btn.style.background = 'var(--accent-light)';
+
+  const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
+  const template = OB_BUDGET_TEMPLATES[key] || [];
+  obBudgetCats = template.map(t => ({
+    name: t.name, icon: t.icon, color: t.color,
+    betrag: total > 0 ? Math.round(total * t.pct / 100) : 0,
+    pct: t.pct
+  }));
+
+  document.getElementById('ob-budget-cats').style.display = template.length > 0 || key === 'leer' ? '' : 'none';
+  if (key === 'leer') obBudgetCats = [];
+  renderObBudgetCats();
+  updateObBudgetSplit();
+}
+
+function updateObBudgetSplit() {
+  const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
+  // Recalculate amounts from pct
+  obBudgetCats.forEach(c => {
+    if (c.pct > 0) c.betrag = Math.round(total * c.pct / 100);
+  });
+  renderObBudgetCats();
+}
+
+function renderObBudgetCats() {
+  const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
+  const assigned = obBudgetCats.reduce((s,c) => s + (parseFloat(c.betrag)||0), 0);
+  const remaining = total - assigned;
+  const BG_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#64748b'];
+
+  // Segment bar
+  const bar = document.getElementById('ob-split-bar');
+  if (bar && total > 0) {
+    bar.innerHTML = obBudgetCats.map(c => {
+      const w = (parseFloat(c.betrag)||0) / total * 100;
+      return `<div style="width:${w}%;background:${c.color};min-width:${w>0?'3px':'0'}" title="${c.name}: ${fmt(c.betrag)}"></div>`;
+    }).join('') + (remaining > 0 ? `<div style="flex:1;background:var(--surface3)" title="Nicht verteilt: ${fmt(remaining)}"></div>` : '');
+  }
+
+  // Remaining label
+  const remEl = document.getElementById('ob-split-remaining');
+  if (remEl) {
+    if (total === 0) {
+      remEl.textContent = '';
+    } else if (Math.abs(remaining) < 1) {
+      remEl.innerHTML = `<span style="color:var(--success);font-weight:700">✓ Budget vollständig aufgeteilt</span>`;
+    } else if (remaining > 0) {
+      remEl.innerHTML = `<span style="color:var(--warning);font-weight:700">Noch ${fmt(remaining)} nicht verteilt</span>`;
+    } else {
+      remEl.innerHTML = `<span style="color:var(--danger);font-weight:700">⚠️ ${fmt(Math.abs(remaining))} über Budget</span>`;
+    }
+  }
+
+  // Category rows
+  const rows = document.getElementById('ob-cat-rows');
+  if (!rows) return;
+  rows.innerHTML = obBudgetCats.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:10px;background:white;border-radius:10px;padding:10px 12px;border:1.5px solid var(--border)">
+      <div style="width:10px;height:10px;border-radius:3px;background:${c.color};flex-shrink:0"></div>
+      <span style="font-size:0.9rem;flex-shrink:0">${c.icon}</span>
+      <span style="font-size:0.84rem;font-weight:600;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
+      <input type="number" value="${c.betrag||''}" min="0" step="1000"
+        oninput="obBudgetCats[${i}].betrag=parseFloat(this.value)||0;obBudgetCats[${i}].pct=0;renderObBudgetCats()"
+        style="width:110px;background:var(--surface2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);padding:5px 9px;font-family:'DM Mono',monospace;font-size:0.82rem;font-weight:700;outline:none;text-align:right"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <span style="font-size:0.75rem;color:var(--text3);font-family:'DM Mono',monospace;width:24px;text-align:right">${total>0?Math.round((parseFloat(c.betrag)||0)/total*100)+'%':''}</span>
+      <button onclick="obBudgetCats.splice(${i},1);renderObBudgetCats()"
+        style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.9rem;padding:2px"
+        onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">✕</button>
+    </div>`).join('');
+}
+
+function addObBudgetCat() {
+  const BG_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#64748b'];
+  obBudgetCats.push({
+    name: 'Neue Kategorie', icon: '📋',
+    color: BG_COLORS[obBudgetCats.length % BG_COLORS.length],
+    betrag: 0, pct: 0
+  });
+  renderObBudgetCats();
+  // Focus the last name input? Not easy without extra ID – user can edit in budget page later
+}
 
 function showOnboarding() {
   obStep = 0;
   obType = 'Neubau';
+  obBudgetCats = [];
   document.getElementById('onboarding-overlay').style.display = 'block';
   renderObColorPicker('#3d6ff8');
   renderObModules();
+  // Pre-select Neubau template visually
+  document.querySelectorAll('#ob-budget-templates button').forEach(b => {
+    b.classList.remove('ob-tpl-active');
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text2)';
+    b.style.background = 'white';
+  });
   updateObUI();
 }
 
@@ -4868,6 +5069,16 @@ function obNext() {
     const name = document.getElementById('ob-name').value.trim();
     if (!name) { showToast('Bitte Projektname eingeben', 'error'); return; }
   }
+  if (obStep === 3) {
+    // Budget step – auto-apply template based on project type if none selected
+    const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
+    if (total > 0 && obBudgetCats.length === 0) {
+      // Auto-apply template matching project type
+      const key = obType.includes('Umbau') ? 'umbau' : obType.includes('Sani') ? 'sanierung' : 'neubau';
+      const firstBtn = document.querySelector('#ob-budget-templates button');
+      if (firstBtn) applyObBudgetTemplate(key, firstBtn);
+    }
+  }
   if (obStep < OB_TOTAL - 1) {
     obStep++;
     updateObUI();
@@ -4881,13 +5092,11 @@ function obBack() {
 }
 
 async function finishOnboarding() {
-  // Build modules object
   const modules = {};
   document.querySelectorAll('#ob-module-grid input[type=checkbox]').forEach(cb => {
     modules[cb.dataset.module] = cb.checked;
   });
 
-  // Create first project with onboarding data
   const proj = EMPTY_PROJECT();
   proj.settings.name    = document.getElementById('ob-name').value.trim() || 'Mein Projekt';
   proj.settings.type    = obType;
@@ -4896,6 +5105,13 @@ async function finishOnboarding() {
   proj.settings.end     = document.getElementById('ob-end').value;
   proj.settings.color   = obColor;
   proj.settings.modules = modules;
+
+  // Add budget categories from onboarding
+  const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
+  proj.settings.budget = total;
+  proj.budgetKat = obBudgetCats
+    .filter(c => c.name && (parseFloat(c.betrag)||0) > 0)
+    .map(c => ({ id: Date.now() + Math.random(), name: c.name, budget: parseFloat(c.betrag)||0 }));
 
   projects = [proj];
   currentProjectId = proj.id;
