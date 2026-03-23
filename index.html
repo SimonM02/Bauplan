@@ -1240,6 +1240,9 @@
     <div class="nav-item" onclick="showPage('gantt')" data-module="gantt" data-page="gantt">
       <span class="icon">📅</span><span>Gantt-Zeitplan</span>
     </div>
+    <div class="nav-item" onclick="showPage('abhaengigkeiten')" data-module="abhaengigkeiten" data-page="abhaengigkeiten">
+      <span class="icon">🔗</span><span>Abhängigkeiten</span>
+    </div>
     <div class="nav-item" onclick="showPage('meilensteine')" data-module="meilensteine" data-page="meilensteine">
       <span class="icon">🏁</span><span>Meilensteine</span>
     </div>
@@ -1547,12 +1550,38 @@
       <div><h2>Aufgaben</h2><p>To-Dos und offene Punkte</p></div>
       <button class="btn btn-primary" onclick="openModal('modal-task')">+ Aufgabe</button>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Aufgabe</th><th>Priorität</th><th>Fällig am</th><th>Status</th><th></th></tr></thead>
-        <tbody id="task-table"></tbody>
-      </table>
+
+    <!-- Stats row -->
+    <div class="cards-grid" style="margin-bottom:20px" id="task-stats-cards">
+      <div class="card" style="border-left:4px solid var(--danger)">
+        <div class="card-label">Hoch · Offen</div>
+        <div class="card-value red" id="task-count-hoch">0</div>
+      </div>
+      <div class="card" style="border-left:4px solid var(--warning)">
+        <div class="card-label">Mittel · Offen</div>
+        <div class="card-value yellow" id="task-count-mittel">0</div>
+      </div>
+      <div class="card" style="border-left:4px solid var(--text3)">
+        <div class="card-label">Niedrig · Offen</div>
+        <div class="card-value" id="task-count-niedrig">0</div>
+      </div>
+      <div class="card" style="border-left:4px solid var(--success)">
+        <div class="card-label">Erledigt</div>
+        <div class="card-value green" id="task-count-done">0</div>
+      </div>
     </div>
+
+    <!-- Filter tabs -->
+    <div class="chart-tabs" style="margin-bottom:16px">
+      <button class="chart-tab active" id="task-filter-all"   onclick="setTaskFilter('all',this)">Alle</button>
+      <button class="chart-tab"        id="task-filter-open"  onclick="setTaskFilter('open',this)">Offen</button>
+      <button class="chart-tab"        id="task-filter-hoch"  onclick="setTaskFilter('hoch',this)">🔴 Hoch</button>
+      <button class="chart-tab"        id="task-filter-today" onclick="setTaskFilter('today',this)">📅 Heute fällig</button>
+      <button class="chart-tab"        id="task-filter-done"  onclick="setTaskFilter('done',this)">✅ Erledigt</button>
+    </div>
+
+    <!-- Task list -->
+    <div id="task-list-container"></div>
   </div>
 
   <!-- BAUTAGEBUCH -->
@@ -1702,6 +1731,26 @@
         <div id="gantt-chart"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ABHÄNGIGKEITEN -->
+  <div class="page" id="page-abhaengigkeiten">
+    <div class="page-header">
+      <div><h2>Abhängigkeiten</h2><p>Was baut auf was auf – parallele &amp; sequentielle Arbeiten</p></div>
+      <button class="btn btn-primary" onclick="openModal('modal-abh-block')">+ Block hinzufügen</button>
+    </div>
+
+    <!-- Legende -->
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:white;border-radius:12px;border:1.5px solid var(--border);font-size:0.8rem;font-weight:600;color:var(--text2)">
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#3d6ff8;display:inline-block"></span>Phase / Hauptblock</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#22c55e;display:inline-block"></span>Erledigt</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#f59e0b;display:inline-block"></span>In Arbeit</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#e2e8f4;display:inline-block"></span>Offen</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:var(--accent);display:inline-block"></span>Abhängigkeit (A → B)</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:#22c55e;border-left:2px dashed #22c55e;display:inline-block"></span>Parallel möglich</span>
+    </div>
+
+    <div id="abh-matrix"></div>
   </div>
 
   <!-- FOTO GALERIE -->
@@ -2124,6 +2173,39 @@
   </div>
 </div>
 
+<!-- Abhängigkeiten Modal -->
+<div class="modal-overlay" id="modal-abh-block">
+  <div class="modal">
+    <h3>Block hinzufügen</h3>
+    <div class="form-row"><label>Name des Blocks / Phase</label><input type="text" id="abh-name" placeholder="z.B. Rohbau, Elektroinstallation"></div>
+    <div class="form-row"><label>Spalte (Zeitliche Reihenfolge)</label>
+      <select id="abh-col">
+        <option value="0">1 – Erster Schritt</option>
+        <option value="1">2 – Zweiter Schritt</option>
+        <option value="2">3 – Dritter Schritt</option>
+        <option value="3">4 – Vierter Schritt</option>
+        <option value="4">5 – Fünfter Schritt</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Status</label>
+      <select id="abh-status">
+        <option>Offen</option><option>In Arbeit</option><option>Erledigt</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Hängt ab von (kommagetrennt, optional)</label>
+      <input type="text" id="abh-deps" placeholder="z.B. Fundament, Rohbau">
+    </div>
+    <div class="form-row"><label>Parallel möglich mit (kommagetrennt, optional)</label>
+      <input type="text" id="abh-parallel" placeholder="z.B. Elektro, Sanitär">
+    </div>
+    <div class="form-row"><label>Notiz</label><textarea id="abh-notiz" placeholder="Details..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-abh-block')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="addAbhBlock()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- Gantt Modal -->
 <div class="modal-overlay" id="modal-gantt">
   <div class="modal">
@@ -2269,7 +2351,7 @@ const EMPTY_PROJECT = () => ({
   kosten: [], eigenleistungen: [], budgetKat: [],
   meilensteine: [], aufgaben: [], tagebuch: [],
   notizen: [], kontakte: [], gantt: [], fotos: [],
-  dokumentation: [], wartungen: []
+  dokumentation: [], wartungen: [], abhaengigkeiten: []
 });
 
 let projects = [];      // array of all projects
@@ -2366,6 +2448,7 @@ function showPage(id) {
   if (id === 'dokumente') renderNotizen();
   if (id === 'kontakte') renderKontakte();
   if (id === 'gantt') renderGantt();
+  if (id === 'abhaengigkeiten') renderAbhaengigkeiten();
   if (id === 'fotos') renderFotos();
   if (id === 'kostenchart') renderKostenChart();
   if (id === 'dokumentation') renderDoku();
@@ -3333,32 +3416,105 @@ function deleteTask(id) {
   save(); renderTasks();
 }
 
+let taskFilter = 'all';
+function setTaskFilter(f, btn) {
+  taskFilter = f;
+  document.querySelectorAll('.chart-tab[id^="task-filter"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTasks();
+}
+
 function renderTasks() {
-  const tbody = document.getElementById('task-table');
-  if (state.aufgaben.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="icon">✅</div><p>Keine Aufgaben eingetragen</p></div></td></tr>`;
+  // Stats
+  const open   = state.aufgaben.filter(t => t.status !== 'Erledigt');
+  const done   = state.aufgaben.filter(t => t.status === 'Erledigt');
+  const hCount = open.filter(t => t.prio === 'Hoch').length;
+  const mCount = open.filter(t => t.prio === 'Mittel').length;
+  const lCount = open.filter(t => t.prio === 'Niedrig').length;
+  document.getElementById('task-count-hoch')?.setAttribute('textContent', hCount) ||
+    (document.getElementById('task-count-hoch') && (document.getElementById('task-count-hoch').textContent = hCount));
+  ['task-count-hoch','task-count-mittel','task-count-niedrig','task-count-done'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = [hCount, mCount, lCount, done.length][i];
+  });
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Filter
+  let items = [...state.aufgaben];
+  if (taskFilter === 'open')  items = items.filter(t => t.status !== 'Erledigt');
+  if (taskFilter === 'hoch')  items = items.filter(t => t.prio === 'Hoch' && t.status !== 'Erledigt');
+  if (taskFilter === 'done')  items = items.filter(t => t.status === 'Erledigt');
+  if (taskFilter === 'today') items = items.filter(t => {
+    if (!t.datum || t.status === 'Erledigt') return false;
+    const d = new Date(t.datum); d.setHours(0,0,0,0);
+    return d <= today;
+  });
+
+  // Sort: high prio first, then by date, done last
+  items.sort((a,b) => {
+    if (a.status === 'Erledigt' && b.status !== 'Erledigt') return 1;
+    if (b.status === 'Erledigt' && a.status !== 'Erledigt') return -1;
+    const po = {Hoch:0, Mittel:1, Niedrig:2};
+    const pd = (po[a.prio]||1) - (po[b.prio]||1);
+    if (pd !== 0) return pd;
+    if (a.datum && b.datum) return new Date(a.datum) - new Date(b.datum);
+    if (a.datum) return -1;
+    if (b.datum) return 1;
+    return 0;
+  });
+
+  const container = document.getElementById('task-list-container');
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="icon">✅</div><p>${taskFilter === 'done' ? 'Noch keine erledigten Aufgaben' : 'Keine Aufgaben gefunden'}</p></div>`;
     return;
   }
-  const sorted = [...state.aufgaben].sort((a,b) => {
-    const po = {Hoch:0,Mittel:1,Niedrig:2};
-    if (a.status==='Erledigt' && b.status!=='Erledigt') return 1;
-    if (b.status==='Erledigt' && a.status!=='Erledigt') return -1;
-    return (po[a.prio]||1) - (po[b.prio]||1);
-  });
-  tbody.innerHTML = sorted.map(t => `
-    <tr>
-      <td>
-        <span style="${t.status==='Erledigt'?'text-decoration:line-through;color:var(--text3)':''}">${t.name}</span>
-        ${t.notiz?`<br><span style="font-size:0.75rem;color:var(--text3)">${t.notiz}</span>`:''}
-      </td>
-      <td><span class="badge ${t.prio==='Hoch'?'badge-red':t.prio==='Mittel'?'badge-yellow':'badge-gray'}">${t.prio}</span></td>
-      <td style="font-family:'DM Mono',monospace;font-size:0.78rem">${t.datum?fmtDate(t.datum):'–'}</td>
-      <td><span class="badge ${t.status==='Erledigt'?'badge-green':'badge-blue'}">${t.status}</span></td>
-      <td style="display:flex;gap:4px">
-        <button class="action-btn" onclick="toggleTask(${t.id})">${t.status==='Erledigt'?'↩':'✓'}</button>
-        <button class="action-btn del" onclick="deleteTask(${t.id})">🗑</button>
-      </td>
-    </tr>`).join('');
+
+  const prioColors = { Hoch: 'var(--danger)', Mittel: 'var(--warning)', Niedrig: 'var(--text3)' };
+  const prioBg     = { Hoch: 'var(--danger-light)', Mittel: 'var(--warning-light)', Niedrig: 'var(--surface2)' };
+
+  container.innerHTML = items.map(t => {
+    const isDone   = t.status === 'Erledigt';
+    const dueDate  = t.datum ? new Date(t.datum) : null;
+    if (dueDate) dueDate.setHours(0,0,0,0);
+    const isOverdue = dueDate && !isDone && dueDate < today;
+    const isDueToday = dueDate && !isDone && dueDate.getTime() === today.getTime();
+
+    let dueBadge = '';
+    if (isOverdue)  dueBadge = `<span class="badge badge-red" style="font-size:0.65rem">⚠️ Überfällig</span>`;
+    else if (isDueToday) dueBadge = `<span class="badge badge-yellow" style="font-size:0.65rem">📅 Heute</span>`;
+    else if (dueDate) dueBadge = `<span class="badge badge-gray" style="font-size:0.65rem">${fmtDate(t.datum)}</span>`;
+
+    return `
+    <div style="background:white;border:1.5px solid ${isDone?'var(--border)':isOverdue?'#fecaca':'var(--border)'};border-radius:14px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;box-shadow:var(--shadow);transition:all 0.2s;opacity:${isDone?'0.65':'1'}"
+      onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
+
+      <!-- Checkbox -->
+      <div onclick="toggleTask(${t.id})"
+        style="width:24px;height:24px;border-radius:50%;border:2px solid ${isDone?'var(--success)':prioColors[t.prio]||'var(--border)'};background:${isDone?'var(--success)':'white'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;transition:all 0.15s"
+        title="${isDone?'Als offen markieren':'Als erledigt markieren'}">
+        ${isDone?'<span style="color:white;font-size:0.8rem">✓</span>':''}
+      </div>
+
+      <!-- Content -->
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-weight:700;font-size:0.92rem;color:var(--text);${isDone?'text-decoration:line-through;color:var(--text3)':''}">${t.name}</span>
+          <span style="display:inline-block;padding:2px 9px;border-radius:99px;font-size:0.68rem;font-weight:700;background:${prioBg[t.prio]};color:${prioColors[t.prio]}">${t.prio}</span>
+          ${dueBadge}
+          ${isDone?'<span class="badge badge-green" style="font-size:0.65rem">Erledigt</span>':''}
+        </div>
+        ${t.notiz?`<div style="font-size:0.8rem;color:var(--text2);margin-top:4px;line-height:1.5">${t.notiz}</div>`:''}
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="action-btn del" onclick="deleteTask(${t.id})" title="Löschen">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ──────────────── DIARY ────────────────
@@ -4786,10 +4942,13 @@ async function onAuthSuccess(user, isNewUser = false) {
   if (emailEl) emailEl.textContent = user.email;
 
   // Load data from cloud
-  await loadFromCloud();
+  const cloudData = await loadFromCloud();
 
-  const hasOnboarded = localStorage.getItem('bauplan_onboarded_' + user.id);
-  if (isNewUser || !hasOnboarded) {
+  // Check onboarding: use cloud flag OR isNewUser OR no projects loaded
+  const hasProjects = projects.length > 0 && projects[0].settings.name !== 'Mein erstes Projekt' && projects[0].settings.name !== 'Neues Projekt';
+  const hasOnboarded = cloudData?.onboarded || (!isNewUser && hasProjects);
+
+  if (!hasOnboarded) {
     showOnboarding();
   } else {
     applyModuleVisibility();
@@ -4807,49 +4966,70 @@ async function syncToCloud() {
     const payload = {
       user_id: currentUser.id,
       typ: 'all_projects',
-      daten: { projects, currentProjectId },
+      daten: {
+        projects,
+        currentProjectId,
+        onboarded: true  // store flag in cloud so it persists across devices
+      },
       updated_at: new Date().toISOString()
     };
 
-    // Try update first, then insert
+    // Check if row exists
     const { data: existing } = await supa.from('projektdaten')
       .select('id').eq('user_id', currentUser.id).maybeSingle();
 
     if (existing) {
-      await supa.from('projektdaten').update({
+      const { error } = await supa.from('projektdaten').update({
         daten: payload.daten, updated_at: payload.updated_at
       }).eq('user_id', currentUser.id);
+      if (error) console.error('Sync update error:', error.message);
     } else {
-      await supa.from('projektdaten').insert(payload);
+      const { error } = await supa.from('projektdaten').insert(payload);
+      if (error) console.error('Sync insert error:', error.message);
     }
+    // Local backup
     localStorage.setItem('bauplan_projects', JSON.stringify(projects));
     localStorage.setItem('bauplan_current', String(currentProjectId));
   } catch(e) {
-    console.log('Sync (non-critical):', e.message);
+    console.error('Sync error:', e.message);
   }
 }
 
 async function loadFromCloud() {
-  if (!currentUser) return;
+  if (!currentUser) return null;
   try {
     const { data, error } = await supa.from('projektdaten')
       .select('daten')
       .eq('user_id', currentUser.id)
-      .eq('typ', 'all_projects')
-      .single();
+      .maybeSingle();  // maybeSingle() doesn't throw if no row found
 
-    if (data?.daten) {
-      projects = data.daten.projects || [];
+    if (error) {
+      console.error('Load error:', error.message);
+      loadAll(); // fallback
+      return null;
+    }
+
+    if (data?.daten?.projects?.length > 0) {
+      projects = data.daten.projects;
       const savedId = data.daten.currentProjectId;
       const found = savedId && projects.find(p => p.id === savedId);
-      currentProjectId = found ? found.id : projects[0]?.id;
-      if (currentProjectId) loadProject(currentProjectId, false);
-      return;
+      currentProjectId = found ? found.id : projects[0].id;
+      loadProject(currentProjectId, false);
+      // Also update local backup
+      localStorage.setItem('bauplan_projects', JSON.stringify(projects));
+      localStorage.setItem('bauplan_current', String(currentProjectId));
+      return data.daten; // return full data incl. onboarded flag
     }
-  } catch(e) {}
 
-  // Fallback to localStorage
-  loadAll();
+    // No cloud data yet – check localStorage
+    loadAll();
+    return null;
+
+  } catch(e) {
+    console.error('Load exception:', e.message);
+    loadAll();
+    return null;
+  }
 }
 
 // ── ONBOARDING ──────────────────────────────────
@@ -5117,14 +5297,139 @@ async function finishOnboarding() {
   currentProjectId = proj.id;
   state = JSON.parse(JSON.stringify(proj));
 
-  localStorage.setItem('bauplan_onboarded_' + currentUser?.id, '1');
   document.getElementById('onboarding-overlay').style.display = 'none';
 
+  // syncToCloud saves onboarded:true flag inside the data
   await syncToCloud();
   updateProjectHeader();
   applyModuleVisibility();
   renderDashboard();
   showToast(`🎉 Willkommen! "${proj.settings.name}" wurde angelegt.`, 'success');
+}
+
+// ──────────────── ABHÄNGIGKEITEN ────────────────
+function addAbhBlock() {
+  state.abhaengigkeiten = state.abhaengigkeiten || [];
+  state.abhaengigkeiten.push({
+    id: Date.now(),
+    name:     document.getElementById('abh-name').value.trim() || 'Block',
+    col:      parseInt(document.getElementById('abh-col').value) || 0,
+    status:   document.getElementById('abh-status').value,
+    deps:     document.getElementById('abh-deps').value.split(',').map(s=>s.trim()).filter(Boolean),
+    parallel: document.getElementById('abh-parallel').value.split(',').map(s=>s.trim()).filter(Boolean),
+    notiz:    document.getElementById('abh-notiz').value
+  });
+  save();
+  closeModal('modal-abh-block');
+  ['abh-name','abh-deps','abh-parallel','abh-notiz'].forEach(id => document.getElementById(id).value = '');
+  renderAbhaengigkeiten();
+}
+
+function deleteAbhBlock(id) {
+  state.abhaengigkeiten = (state.abhaengigkeiten||[]).filter(b => b.id !== id);
+  save(); renderAbhaengigkeiten();
+}
+
+function toggleAbhStatus(id) {
+  const b = (state.abhaengigkeiten||[]).find(b => b.id === id);
+  if (!b) return;
+  const cycle = ['Offen','In Arbeit','Erledigt'];
+  b.status = cycle[(cycle.indexOf(b.status)+1) % cycle.length];
+  save(); renderAbhaengigkeiten();
+}
+
+function renderAbhaengigkeiten() {
+  state.abhaengigkeiten = state.abhaengigkeiten || [];
+  const el = document.getElementById('abh-matrix');
+  if (!el) return;
+
+  if (state.abhaengigkeiten.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="icon">🔗</div><p>Noch keine Blöcke – füge deine erste Phase hinzu!<br><span style="font-size:0.78rem">Beispiel: Fundament → Rohbau → Dach</span></p></div>`;
+    return;
+  }
+
+  // Group by column
+  const maxCol = Math.max(...state.abhaengigkeiten.map(b => b.col)) + 1;
+  const cols = Array.from({length: maxCol}, (_,i) =>
+    state.abhaengigkeiten.filter(b => b.col === i).sort((a,b) => a.name.localeCompare(b.name))
+  );
+
+  const statusColors = {
+    'Erledigt':  { bg:'var(--success-light)', border:'#bbf7d0', text:'var(--success)', dot:'#22c55e' },
+    'In Arbeit': { bg:'var(--warning-light)', border:'#fde68a', text:'var(--warning)', dot:'#f59e0b' },
+    'Offen':     { bg:'white',                border:'var(--border)', text:'var(--text2)', dot:'#94a3b8' }
+  };
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;padding-bottom:12px">
+      <div style="display:flex;gap:0;min-width:max-content;position:relative">
+        ${cols.map((colBlocks, ci) => `
+          <div style="display:flex;flex-direction:column;gap:0;align-items:center;min-width:220px">
+            <!-- Column header -->
+            <div style="font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;text-align:center;font-weight:600">
+              Schritt ${ci+1}
+            </div>
+            <!-- Blocks -->
+            <div style="display:flex;flex-direction:column;gap:10px;width:200px">
+              ${colBlocks.map(b => {
+                const sc = statusColors[b.status] || statusColors['Offen'];
+                const hasDeps = b.deps.length > 0;
+                const hasParallel = b.parallel.length > 0;
+                return `
+                <div style="background:${sc.bg};border:2px solid ${sc.border};border-radius:12px;padding:14px;position:relative;cursor:pointer;transition:box-shadow 0.15s"
+                  onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
+                  <!-- Status dot -->
+                  <div style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:${sc.dot}" title="${b.status}"></div>
+                  <!-- Name -->
+                  <div style="font-weight:700;font-size:0.88rem;color:var(--text);margin-bottom:6px;padding-right:16px">${b.name}</div>
+                  <!-- Status badge -->
+                  <div onclick="toggleAbhStatus(${b.id})" style="display:inline-block;padding:2px 9px;border-radius:99px;font-size:0.68rem;font-weight:700;color:${sc.text};background:${sc.border};cursor:pointer;margin-bottom:6px">${b.status}</div>
+                  <!-- Deps -->
+                  ${hasDeps ? `<div style="font-size:0.73rem;color:var(--text2);margin-top:4px">🔒 Wartet auf: <strong>${b.deps.join(', ')}</strong></div>` : ''}
+                  <!-- Parallel -->
+                  ${hasParallel ? `<div style="font-size:0.73rem;color:var(--teal);margin-top:3px">⚡ Parallel: ${b.parallel.join(', ')}</div>` : ''}
+                  <!-- Notiz -->
+                  ${b.notiz ? `<div style="font-size:0.73rem;color:var(--text3);margin-top:5px;border-top:1px solid ${sc.border};padding-top:5px">${b.notiz}</div>` : ''}
+                  <!-- Delete -->
+                  <button onclick="deleteAbhBlock(${b.id})" style="position:absolute;bottom:8px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.8rem;opacity:0.5" onmouseover="this.style.opacity='1';this.style.color='var(--danger)'" onmouseout="this.style.opacity='0.5';this.style.color='var(--text3)'">🗑</button>
+                </div>`;
+              }).join('')}
+              <!-- Add to this column -->
+              <div onclick="prefillAbhCol(${ci})"
+                style="border:2px dashed var(--border);border-radius:12px;padding:10px;text-align:center;cursor:pointer;font-size:0.8rem;color:var(--text3);font-weight:600;transition:all 0.15s"
+                onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">
+                + Block
+              </div>
+            </div>
+          </div>
+          ${ci < cols.length-1 ? `
+          <!-- Arrow between columns -->
+          <div style="display:flex;align-items:center;padding:0 8px;margin-top:32px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+              <div style="width:36px;height:2px;background:var(--accent);position:relative">
+                <div style="position:absolute;right:-6px;top:-4px;width:0;height:0;border-left:8px solid var(--accent);border-top:5px solid transparent;border-bottom:5px solid transparent"></div>
+              </div>
+            </div>
+          </div>` : ''}
+        `).join('')}
+
+        <!-- Add new column -->
+        <div style="display:flex;flex-direction:column;align-items:center;min-width:180px;padding-top:28px">
+          <div onclick="prefillAbhCol(${maxCol})"
+            style="border:2px dashed var(--border);border-radius:12px;padding:20px 16px;text-align:center;cursor:pointer;color:var(--text3);font-size:0.82rem;font-weight:600;transition:all 0.15s;width:160px"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">
+            + Neuer Schritt
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function prefillAbhCol(col) {
+  document.getElementById('abh-col').value = String(col);
+  openModal('modal-abh-block');
 }
 
 // ── INIT ─────────────────────────────────────────
