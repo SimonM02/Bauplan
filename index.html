@@ -1505,6 +1505,9 @@
 </style>
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -1997,6 +2000,7 @@
     <div class="page-header">
       <div><h2>Kostenverfolgung</h2><p>Ausgaben und Eigenleistungen</p></div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="exportKostenPDF()" title="Als PDF exportieren">📄 PDF</button>
         <button class="btn btn-ghost" onclick="openModal('modal-eigenleistung')">+ Eigenleistung</button>
         <button class="btn btn-ghost" onclick="openModal('modal-rechnung-scan')" style="border-color:#6d28d9;color:#6d28d9">🤖 Rechnung scannen</button>
         <button class="btn btn-primary" onclick="openModal('modal-kosten')">+ Ausgabe erfassen</button>
@@ -2166,7 +2170,10 @@
   <div class="page" id="page-tagebuch">
     <div class="page-header">
       <div><h2>Bautagebuch</h2><p>Tagesberichte, Arbeitszeiten &amp; Mannschaft</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-tagebuch')">+ Eintrag</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="exportTagebuchPDF()" title="Als PDF exportieren">📄 PDF</button>
+        <button class="btn btn-primary" onclick="openModal('modal-tagebuch')">+ Eintrag</button>
+      </div>
     </div>
     <div class="chart-tabs" style="margin-bottom:20px">
       <button class="chart-tab active" id="diary-tab-log" onclick="switchDiaryTab('log',this)">Einträge</button>
@@ -2533,7 +2540,10 @@
   <div class="page" id="page-maengel">
     <div class="page-header">
       <div><h2>Mängelliste</h2><p>Mängel dokumentieren, fotografieren &amp; nachverfolgen</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-mangel')">+ Mangel</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="exportMaengelPDF()" title="Als PDF exportieren">📄 PDF</button>
+        <button class="btn btn-primary" onclick="openModal('modal-mangel')">+ Mangel</button>
+      </div>
     </div>
     <div class="cards-grid">
       <div class="card"><div class="card-label">Offen</div><div class="card-value red" id="mg-offen">0</div></div>
@@ -2554,7 +2564,10 @@
   <div class="page" id="page-rechnungen">
     <div class="page-header">
       <div><h2>Rechnungsübersicht</h2><p>Alle automatisch eingescannten Rechnungen</p></div>
-      <button class="btn btn-ghost" onclick="openModal('modal-rechnung-scan')" style="border-color:#6d28d9;color:#6d28d9">🤖 Neue Rechnung scannen</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="exportRechnungenPDF()" title="Als PDF exportieren">📄 PDF</button>
+        <button class="btn btn-ghost" onclick="openModal('modal-rechnung-scan')" style="border-color:#6d28d9;color:#6d28d9">🤖 Neue Rechnung scannen</button>
+      </div>
     </div>
 
     <div class="cards-grid">
@@ -8821,6 +8834,177 @@ function renderKostenaufteilung() {
     }
   });
 })();
+
+// ── PDF EXPORT ──────────────────────────────────────────────────────────────
+function pdfHeader(doc, title, subtitle) {
+  const { jsPDF } = window.jspdf;
+  doc.setFillColor(41, 98, 255);
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('buildora', 14, 10);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(title, 14, 17);
+  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(8);
+  doc.text(subtitle, 14, 27);
+  doc.text(`Erstellt: ${new Date().toLocaleDateString('de-AT')}`, 196, 27, { align: 'right' });
+  doc.setDrawColor(220, 220, 220);
+  doc.line(14, 30, 196, 30);
+}
+
+function exportTagebuchPDF() {
+  if (!window.jspdf) { showToast('PDF-Bibliothek lädt noch…', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const proj = state.projects.find(p => p.id === state.activeProjekt);
+  const projName = proj ? proj.name : 'Bauvorhaben';
+  pdfHeader(doc, 'Bautagebuch', projName);
+
+  if (state.tagebuch.length === 0) {
+    doc.setFontSize(10); doc.setTextColor(120, 120, 120);
+    doc.text('Keine Einträge vorhanden.', 14, 40);
+  } else {
+    let y = 36;
+    [...state.tagebuch].reverse().forEach((e, i) => {
+      if (y > 260) { doc.addPage(); pdfHeader(doc, 'Bautagebuch', projName); y = 36; }
+      doc.setFillColor(248, 249, 252);
+      const workers = e.workers || [];
+      const totalH = workers.reduce((s, w) => s + (w.hours || 0), 0);
+      const textLines = doc.splitTextToSize((e.text || '').replace(/\n/g, ' '), 170);
+      const blockH = 10 + textLines.length * 4.5 + (workers.length ? 6 + workers.length * 5 : 0) + (e.tags?.length ? 6 : 0) + 4;
+      if (y + blockH > 270) { doc.addPage(); pdfHeader(doc, 'Bautagebuch', projName); y = 36; }
+      doc.roundedRect(12, y, 186, blockH, 2, 2, 'F');
+      doc.setTextColor(41, 98, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+      doc.text(`${fmtDate(e.datum)}  ·  ${e.weather || ''}${e.temp != null ? `  ·  ${e.temp}°C` : ''}`, 16, y + 5);
+      doc.setTextColor(30, 30, 30); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text(e.title || '', 16, y + 10);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60);
+      doc.text(textLines, 16, y + 16);
+      let iy = y + 16 + textLines.length * 4.5;
+      if (workers.length) {
+        doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+        doc.text(`👷 Mannschaft – ${totalH}h gesamt:  ${workers.map(w => `${w.name} (${w.hours}h)`).join('  ·  ')}`, 16, iy + 4);
+        iy += 9;
+      }
+      if (e.tags?.length) {
+        doc.setFontSize(7); doc.setTextColor(80, 80, 150);
+        doc.text(e.tags.join('  ·  '), 16, iy + 4);
+      }
+      y += blockH + 4;
+    });
+  }
+  doc.save(`Bautagebuch_${projName.replace(/\s/g,'_')}_${today()}.pdf`);
+  showToast('📄 Bautagebuch als PDF gespeichert', 'success');
+}
+
+function exportMaengelPDF() {
+  if (!window.jspdf) { showToast('PDF-Bibliothek lädt noch…', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const proj = state.projects.find(p => p.id === state.activeProjekt);
+  const projName = proj ? proj.name : 'Bauvorhaben';
+  pdfHeader(doc, 'Mängelliste', projName);
+
+  const rows = state.maengel.map(m => [
+    fmtDate(m.datum),
+    m.gewerk || '–',
+    m.beschreibung || '–',
+    m.status || '–',
+    fmtDate(m.frist) || '–',
+    m.firma || '–'
+  ]);
+
+  doc.autoTable({
+    startY: 34,
+    head: [['Datum', 'Gewerk', 'Beschreibung', 'Status', 'Frist', 'Firma']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [41, 98, 255], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 249, 252] },
+    columnStyles: { 2: { cellWidth: 60 } },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 3) {
+        const s = data.cell.raw;
+        if (s === 'Offen') data.cell.styles.textColor = [220, 38, 38];
+        else if (s === 'In Bearbeitung') data.cell.styles.textColor = [217, 119, 6];
+        else if (s === 'Behoben') data.cell.styles.textColor = [22, 163, 74];
+      }
+    }
+  });
+  doc.save(`Maengelliste_${projName.replace(/\s/g,'_')}_${today()}.pdf`);
+  showToast('📄 Mängelliste als PDF gespeichert', 'success');
+}
+
+function exportKostenPDF() {
+  if (!window.jspdf) { showToast('PDF-Bibliothek lädt noch…', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const proj = state.projects.find(p => p.id === state.activeProjekt);
+  const projName = proj ? proj.name : 'Bauvorhaben';
+  pdfHeader(doc, 'Kostenverfolgung', projName);
+
+  const rows = state.kosten.map(k => [
+    fmtDate(k.datum),
+    k.kategorie || '–',
+    k.beschreibung || '–',
+    k.lieferant || '–',
+    fmt(k.netto || 0),
+    fmt(k.brutto || 0),
+    k.bezahlt ? '✓' : '○'
+  ]);
+  const total = state.kosten.reduce((s, k) => s + (k.brutto || 0), 0);
+
+  doc.autoTable({
+    startY: 34,
+    head: [['Datum', 'Kategorie', 'Beschreibung', 'Lieferant', 'Netto', 'Brutto', 'Bezahlt']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [41, 98, 255], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 249, 252] },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' } },
+    foot: [['', '', '', 'Gesamt', '', fmt(total), '']],
+    footStyles: { fillColor: [240, 244, 255], fontStyle: 'bold', textColor: [41, 98, 255] }
+  });
+  doc.save(`Kostenverfolgung_${projName.replace(/\s/g,'_')}_${today()}.pdf`);
+  showToast('📄 Kostenverfolgung als PDF gespeichert', 'success');
+}
+
+function exportRechnungenPDF() {
+  if (!window.jspdf) { showToast('PDF-Bibliothek lädt noch…', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const proj = state.projects.find(p => p.id === state.activeProjekt);
+  const projName = proj ? proj.name : 'Bauvorhaben';
+  pdfHeader(doc, 'Rechnungsübersicht', projName);
+
+  const rows = state.gescannteRechnungen.map(r => [
+    fmtDate(r.datum),
+    r.lieferant || '–',
+    r.kategorie || '–',
+    r.rechnungsnummer || '–',
+    fmt(r.netto || 0),
+    `${r.mwst || 0}%`,
+    fmt(r.brutto || 0)
+  ]);
+  const total = state.gescannteRechnungen.reduce((s, r) => s + (r.brutto || 0), 0);
+
+  doc.autoTable({
+    startY: 34,
+    head: [['Datum', 'Lieferant', 'Kategorie', 'Rechnungs-Nr.', 'Netto', 'MwSt', 'Brutto']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [109, 40, 217], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 248, 255] },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'center' }, 6: { halign: 'right' } },
+    foot: [['', '', '', 'Gesamt', '', '', fmt(total)]],
+    footStyles: { fillColor: [243, 240, 255], fontStyle: 'bold', textColor: [109, 40, 217] }
+  });
+  doc.save(`Rechnungen_${projName.replace(/\s/g,'_')}_${today()}.pdf`);
+  showToast('📄 Rechnungsübersicht als PDF gespeichert', 'success');
+}
 </script>
 </body>
 </html>
