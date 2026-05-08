@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buildora – Mein Bauprojekt</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233d6ff8'/><path d='M16 7L5 16h3v9h7v-5h2v5h7v-9h3z' fill='white'/></svg>">
+<meta name="theme-color" content="#3d6ff8">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -771,6 +773,15 @@
     color: var(--text);
     letter-spacing: -0.6px;
   }
+  body.privacy-mode .card-value,
+  body.privacy-mode [style*="JetBrains"],
+  body.privacy-mode [style*="monospace"],
+  body.privacy-mode [data-private] {
+    filter: blur(9px) !important;
+    user-select: none !important;
+    pointer-events: none;
+    transition: filter 0.2s;
+  }
 
   .card-sub {
     font-size: 0.75rem;
@@ -1436,6 +1447,15 @@
   .photo-upload-area p { font-size: 0.875rem; color: var(--text2); font-weight: 500; }
   .photo-upload-area small { font-size: 0.75rem; color: var(--text3); }
 
+  /* ALBUM COLLAGE */
+  .album-cover { position:relative; aspect-ratio:1; overflow:hidden; border-radius:10px 10px 0 0; background:var(--surface2); }
+  .album-cover > img { width:100%; height:100%; object-fit:cover; }
+  .album-collage { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; width:100%; height:100%; gap:2px; }
+  .album-collage img { width:100%; height:100%; object-fit:cover; }
+  .album-count { position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.62); color:#fff; font-size:0.68rem; font-weight:700; padding:3px 7px; border-radius:20px; }
+  .album-card { cursor:pointer; }
+  .album-card:hover .album-cover > img, .album-card:hover .album-collage img { transform:scale(1.04); transition:transform 0.2s; }
+
   /* LIGHTBOX */
   .lightbox {
     display: none;
@@ -1818,9 +1838,6 @@
       <span class="icon">💳</span><span>Zahlungsplan</span>
     </div>
     <div class="nav-section" data-module="qualitaet">Qualität</div>
-    <div class="nav-item" onclick="showPage('maengel')" data-module="maengel" data-page="maengel">
-      <span class="icon">⚠️</span><span>Mängelliste</span>
-    </div>
 
     <div class="nav-section" data-module="gebaeude">Gebäude</div>
     <div class="nav-item" onclick="showPage('dokumentation')" data-module="dokumentation" data-page="dokumentation">
@@ -1855,7 +1872,12 @@
         <h2>Dashboard</h2>
         <p id="dashboard-subtitle">Willkommen zurück – hier dein Projektüberblick</p>
       </div>
-      <button class="btn btn-ghost" onclick="showPage('settings')">⚙ Einstellungen</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="privacy-btn" class="btn btn-ghost" onclick="togglePrivacy()" title="Alle Zahlen ausblenden">👁 Zahlen ausblenden</button>
+        <button id="ki-panel-btn" class="btn btn-ghost" onclick="toggleKIPanel()" title="KI-Bauberater ein-/ausblenden">🤖 KI ausblenden</button>
+        <button class="btn btn-ghost" onclick="sendStatusReport()" title="Wöchentlichen Statusbericht per E-Mail senden">📧 Statusbericht</button>
+        <button class="btn btn-ghost" onclick="showPage('settings')">⚙ Einstellungen</button>
+      </div>
     </div>
 
     <!-- KI-BAUBERATER PANEL -->
@@ -2157,10 +2179,25 @@
   <!-- NOTIZEN -->
   <div class="page" id="page-dokumente">
     <div class="page-header">
-      <div><h2>Notizen</h2><p>Wichtige Informationen und Hinweise</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-notiz')">+ Notiz</button>
+      <div><h2>Notizen & Dokumente</h2><p>Notizen, Baupläne, Verträge und Genehmigungen</p></div>
+      <div style="display:flex;gap:8px">
+        <input type="file" id="datei-upload-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx" style="display:none" onchange="uploadDokument(this)">
+        <button class="btn btn-ghost" onclick="document.getElementById('datei-upload-input').click()">📎 Dokument</button>
+        <button class="btn btn-primary" onclick="openModal('modal-notiz')">+ Notiz</button>
+      </div>
     </div>
-    <div id="notiz-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
+
+    <!-- Dokumente -->
+    <div id="datei-section" style="margin-bottom:28px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:12px">Abgelegte Dokumente</div>
+      <div id="datei-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
+    </div>
+
+    <!-- Notizen -->
+    <div>
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:12px">Notizen</div>
+      <div id="notiz-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
+    </div>
   </div>
 
   <!-- HANDWERKER -->
@@ -2216,7 +2253,22 @@
 
         <!-- Konto -->
         <div class="table-wrap" style="margin-bottom:16px">
-          <div class="table-header"><div class="table-title">Mein Konto</div></div>
+          <div class="table-header"><div class="table-title">Mitteilungen</div></div>
+          <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <div style="font-size:0.85rem;font-weight:600;color:var(--text)" id="notif-status-label">Status wird geladen…</div>
+                <div style="font-size:0.75rem;color:var(--text3);margin-top:2px">Erinnerungen bei fälligen Zahlungen, Meilensteinen und Skonto-Fristen</div>
+              </div>
+              <span id="notif-status-badge" class="badge badge-gray" style="flex-shrink:0">–</span>
+            </div>
+            <button id="notif-allow-btn" onclick="enableNotifications()" class="btn btn-primary" style="font-size:0.82rem">🔔 Erlauben</button>
+            <div style="font-size:0.75rem;color:var(--text3);background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.55">
+              Mitteilungen erscheinen automatisch beim nächsten Öffnen der App, wenn eine Fälligkeit <strong>innerhalb von 3 Tagen</strong> liegt.
+            </div>
+          </div>
+
+          <div class="table-header" style="border-top:1px solid var(--border)"><div class="table-title">Mein Konto</div></div>
           <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:10px">
               <div style="width:38px;height:38px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:1rem;flex-shrink:0" id="s-avatar">?</div>
@@ -2346,12 +2398,14 @@
       <p>Fotos hier ablegen oder klicken zum Auswählen</p>
       <small>JPG, PNG, WEBP – mehrere Dateien möglich</small>
     </div>
+    <div class="chart-tabs" style="margin-bottom:16px">
+      <button class="chart-tab active" id="foto-tab-alben" onclick="setFotoView('alben',this)">📁 Alben</button>
+      <button class="chart-tab" id="foto-tab-alle" onclick="setFotoView('alle',this)">🖼 Alle Fotos</button>
+    </div>
     <div style="margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input class="search-bar" id="foto-search" placeholder="🔍 Suchen..." oninput="renderFotos()" style="width:180px">
       <select id="foto-filter" class="search-bar" style="width:160px" onchange="renderFotos()">
         <option value="">Alle Kategorien</option>
-        <option>Rohbau</option><option>Dach</option><option>Fenster & Türen</option>
-        <option>Innenausbau</option><option>Außenanlagen</option><option>Sonstiges</option>
       </select>
     </div>
     <div class="photo-grid" id="photo-grid"></div>
@@ -2433,69 +2487,11 @@
   <!-- ANGEBOTE -->
   <div class="page" id="page-angebote">
     <div class="page-header">
-      <div><h2>Angebote</h2><p>Angebote verwalten und zu Rechnungen konvertieren</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-angebot')">+ Angebot</button>
-    </div>
-    <div class="cards-grid">
-      <div class="card"><div class="card-label">Angebote gesamt</div><div class="card-value" id="ang-count">0</div></div>
-      <div class="card"><div class="card-label">Offen / Ausstehend</div><div class="card-value yellow" id="ang-offen">0</div></div>
-      <div class="card"><div class="card-label">Angenommen</div><div class="card-value green" id="ang-angenommen">0</div></div>
-      <div class="card"><div class="card-label">Gesamtvolumen</div><div class="card-value" id="ang-volumen">€ 0</div></div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Anbieter</th><th>Gewerk / Beschreibung</th><th>Betrag</th><th>Erhalten am</th><th>Gültig bis</th><th>Status</th><th></th></tr></thead>
-        <tbody id="angebote-table"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ZAHLUNGSPLAN -->
-  <div class="page" id="page-zahlungsplan">
-    <div class="page-header">
-      <div><h2>Zahlungsplan</h2><p>Fällige Zahlungen und Zahlungsfristen im Überblick</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-zahlung')">+ Zahlung planen</button>
-    </div>
-    <div class="cards-grid">
-      <div class="card" style="border-left:3px solid var(--danger)"><div class="card-label">Überfällig</div><div class="card-value red" id="zp-overdue">€ 0</div></div>
-      <div class="card" style="border-left:3px solid var(--warning)"><div class="card-label">Diese Woche fällig</div><div class="card-value yellow" id="zp-week">€ 0</div></div>
-      <div class="card" style="border-left:3px solid var(--accent)"><div class="card-label">Diesen Monat</div><div class="card-value" id="zp-month">€ 0</div></div>
-      <div class="card" style="border-left:3px solid var(--success)"><div class="card-label">Bezahlt (gesamt)</div><div class="card-value green" id="zp-paid">€ 0</div></div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Beschreibung</th><th>Empfänger</th><th>Betrag</th><th>Fällig am</th><th>Status</th><th></th></tr></thead>
-        <tbody id="zahlungsplan-table"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- MÄNGELLISTE -->
-  <div class="page" id="page-maengel">
-    <div class="page-header">
-      <div><h2>Mängelliste</h2><p>Mängel dokumentieren und verfolgen bis zur Behebung</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-mangel')">+ Mangel melden</button>
-    </div>
-    <div class="cards-grid">
-      <div class="card"><div class="card-label">Offen</div><div class="card-value red" id="m-offen">0</div></div>
-      <div class="card"><div class="card-label">In Bearbeitung</div><div class="card-value yellow" id="m-progress">0</div></div>
-      <div class="card"><div class="card-label">Behoben</div><div class="card-value green" id="m-done">0</div></div>
-      <div class="card"><div class="card-label">Gesamt</div><div class="card-value" id="m-total">0</div></div>
-    </div>
-    <div class="chart-tabs" style="margin-bottom:16px">
-      <button class="chart-tab active" id="m-filter-all"    onclick="setMangelFilter('all',this)">Alle</button>
-      <button class="chart-tab"        id="m-filter-offen"  onclick="setMangelFilter('Offen',this)">Offen</button>
-      <button class="chart-tab"        id="m-filter-prog"   onclick="setMangelFilter('In Bearbeitung',this)">In Bearbeitung</button>
-      <button class="chart-tab"        id="m-filter-done"   onclick="setMangelFilter('Behoben',this)">Behoben</button>
-    </div>
-    <div id="maengel-list"></div>
-  </div>
-
-  <!-- ANGEBOTE -->
-  <div class="page" id="page-angebote">
-    <div class="page-header">
-      <div><h2>Angebote</h2><p>Angebote erfassen und zu Rechnungen umwandeln</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-angebot')">+ Angebot</button>
+      <div><h2>Angebote</h2><p>Angebote erfassen, vergleichen und zu Rechnungen umwandeln</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="border-color:#7c3aed;color:#7c3aed" onclick="openModal('modal-angebot-ki')">🤖 KI einlesen</button>
+        <button class="btn btn-primary" onclick="openModal('modal-angebot')">+ Angebot</button>
+      </div>
     </div>
     <div class="cards-grid">
       <div class="card"><div class="card-label">Angebote gesamt</div><div class="card-value" id="ang-count">0</div></div>
@@ -2503,12 +2499,19 @@
       <div class="card"><div class="card-label">Angenommen</div><div class="card-value green" id="ang-angenommen">0</div></div>
       <div class="card"><div class="card-label">Gesamtvolumen</div><div class="card-value" id="ang-volumen">€ 0</div></div>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Datum</th><th>Gewerk / Beschreibung</th><th>Anbieter</th><th>Betrag</th><th>Status</th><th>Fälligkeit</th><th></th></tr></thead>
-        <tbody id="angebot-table"></tbody>
-      </table>
+    <div class="chart-tabs" style="margin-bottom:16px">
+      <button class="chart-tab active" id="ang-tab-liste" onclick="setAngView('liste',this)">📋 Liste</button>
+      <button class="chart-tab" id="ang-tab-vergleich" onclick="setAngView('vergleich',this)">⚖️ Vergleich</button>
     </div>
+    <div id="ang-liste-view">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Datum</th><th>Gewerk / Beschreibung</th><th>Anbieter</th><th>Betrag</th><th>Status</th><th>Fälligkeit</th><th></th></tr></thead>
+          <tbody id="angebot-table"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="ang-vergleich-view" style="display:none"></div>
   </div>
 
   <!-- ZAHLUNGSPLAN -->
@@ -2621,7 +2624,7 @@
       MwSt-Betrag: € 0,00
     </div>
     <div class="form-row"><label>Status</label>
-      <select id="k-status"><option>Bezahlt</option><option>Ausstehend</option><option>Storniert</option></select>
+      <select id="k-status" onchange="toggleBezahltVon('k-status','k-bezahlt-von')"><option>Bezahlt</option><option>Ausstehend</option><option>Storniert</option></select>
     </div>
     <div class="form-row"><label>Bezahlt von</label>
       <select id="k-bezahlt-von">
@@ -2629,6 +2632,13 @@
       </select>
     </div>
     <div class="form-row"><label>Anbieter / Lieferant</label><input type="text" id="k-anbieter" placeholder="Firma GmbH"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-row"><label>Skonto (%)</label><input type="number" id="k-skonto-proz" placeholder="z.B. 2" step="0.1" min="0" oninput="updateSkontoPreview('k')"></div>
+      <div class="form-row"><label>Skonto bis</label><input type="date" id="k-skonto-bis" onchange="updateSkontoPreview('k')"></div>
+    </div>
+    <div id="k-skonto-preview" style="display:none;background:#fefce8;border:1.5px solid #fde68a;border-radius:8px;padding:8px 14px;margin-bottom:16px;font-size:0.8rem;color:#854d0e">
+      💰 Bei Zahlung bis <strong id="k-skonto-date-txt">–</strong>: <strong id="k-skonto-save-txt">€ 0</strong> sparen → Zahlung nur <strong id="k-skonto-total-txt">€ 0</strong>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-kosten');document.getElementById('k-edit-id').value=''">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveKosten()">Speichern</button>
@@ -2752,7 +2762,7 @@
           <select id="scan-kat"></select>
         </div>
         <div class="form-row" style="margin:0"><label>Status</label>
-          <select id="scan-status"><option>Bezahlt</option><option>Ausstehend</option></select>
+          <select id="scan-status" onchange="toggleBezahltVon('scan-status','scan-bezahlt-von')"><option>Bezahlt</option><option>Ausstehend</option></select>
         </div>
         <div class="form-row" style="margin:0"><label>Bezahlt von</label>
           <select id="scan-bezahlt-von">
@@ -2760,6 +2770,13 @@
           </select>
         </div>
         <div id="scan-ki-notiz" style="font-size:0.78rem;color:var(--text3);background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.5"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-row" style="margin:0"><label>Skonto (%)</label><input type="number" id="scan-skonto-proz" placeholder="z.B. 2" step="0.1" min="0" oninput="updateSkontoPreview('scan')"></div>
+          <div class="form-row" style="margin:0"><label>Skonto bis</label><input type="date" id="scan-skonto-bis" onchange="updateSkontoPreview('scan')"></div>
+        </div>
+        <div id="scan-skonto-preview" style="display:none;background:#fefce8;border:1.5px solid #fde68a;border-radius:8px;padding:8px 14px;font-size:0.8rem;color:#854d0e">
+          💰 Bei Zahlung bis <strong id="scan-skonto-date-txt">–</strong>: <strong id="scan-skonto-save-txt">€ 0</strong> sparen → Zahlung nur <strong id="scan-skonto-total-txt">€ 0</strong>
+        </div>
       </div>
     </div>
 
@@ -2863,7 +2880,11 @@
     <div class="form-row"><label>Titel</label><input type="text" id="tb-title" placeholder="z.B. Betonage Decke EG"></div>
     <div class="form-row"><label>Bericht</label><textarea id="tb-text" placeholder="Was wurde heute gemacht?"></textarea></div>
     <div class="form-row"><label>Wetter</label>
-      <select id="tb-weather"><option>☀️ Sonnig</option><option>⛅ Bewölkt</option><option>🌧️ Regen</option><option>❄️ Schnee</option><option>🌬️ Wind</option></select>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="tb-weather" style="flex:1"><option>☀️ Sonnig</option><option>⛅ Bewölkt</option><option>🌧️ Regen</option><option>❄️ Schnee</option><option>🌬️ Wind</option></select>
+        <input type="number" id="tb-temp" placeholder="°C" step="0.1" style="width:72px;text-align:center" title="Temperatur">
+        <button type="button" class="btn btn-ghost" style="white-space:nowrap;font-size:0.8rem;padding:6px 10px" onclick="fetchWetter()" id="tb-wetter-btn">🌡️ Abrufen</button>
+      </div>
     </div>
     <div class="form-row">
       <label>Arbeiter & Stunden</label>
@@ -2989,6 +3010,39 @@
   </div>
 </div>
 
+<!-- Angebot KI Modal -->
+<div class="modal-overlay" id="modal-angebot-ki">
+  <div class="modal" style="width:560px">
+    <h3>🤖 Angebot per KI einlesen</h3>
+    <p style="font-size:0.82rem;color:var(--text3);margin-bottom:16px">Füge den Angebotstext ein oder lade ein Foto hoch – die KI erkennt die wichtigsten Daten automatisch. Kategorie und Status kannst du danach noch setzen.</p>
+    <div id="ang-ki-input-area">
+      <div class="form-row"><label>Angebotstext einfügen</label><textarea id="ang-ki-text" rows="5" placeholder="Text des Angebots hier einfügen (z.B. aus PDF kopiert)…"></textarea></div>
+      <div class="form-row"><label>oder Foto / Scan hochladen</label><input type="file" id="ang-ki-file" accept="image/*" onchange="previewAngKiFile()"></div>
+      <div id="ang-ki-preview" style="display:none;margin-top:8px"><img id="ang-ki-preview-img" style="max-height:100px;border-radius:8px;border:1px solid var(--border)"></div>
+    </div>
+    <div id="ang-ki-loading" style="display:none;text-align:center;padding:24px;color:var(--text3)">
+      <div style="font-size:1.8rem;margin-bottom:8px">⏳</div>
+      <div style="font-size:0.85rem">KI liest Angebot aus…</div>
+    </div>
+    <div id="ang-ki-result" style="display:none;background:var(--surface2);border-radius:10px;padding:14px;margin-top:12px">
+      <div style="font-weight:700;font-size:0.82rem;color:var(--text2);margin-bottom:10px">✅ Erkannte Daten – bitte prüfen und ggf. korrigieren:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row"><label>Beschreibung / Gewerk</label><input type="text" id="ang-ki-beschr"></div>
+        <div class="form-row"><label>Anbieter / Firma</label><input type="text" id="ang-ki-anbieter"></div>
+        <div class="form-row"><label>Betrag (€ brutto)</label><input type="number" id="ang-ki-betrag" step="0.01"></div>
+        <div class="form-row"><label>Angebotsdatum</label><input type="date" id="ang-ki-datum"></div>
+        <div class="form-row" style="grid-column:1/-1"><label>Gültig bis</label><input type="date" id="ang-ki-gueltig"></div>
+      </div>
+      <div class="form-row" style="margin-top:4px"><label>Notiz / Details</label><textarea id="ang-ki-notiz" rows="2"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-angebot-ki');resetAngKI()">Abbrechen</button>
+      <button id="ang-ki-scan-btn" class="btn btn-ghost" style="border-color:#7c3aed;color:#7c3aed" onclick="scanAngKI()">🤖 Auslesen</button>
+      <button id="ang-ki-save-btn" class="btn btn-primary" style="display:none" onclick="confirmAngKI()">✅ Übernehmen</button>
+    </div>
+  </div>
+</div>
+
 <!-- Zahlung Modal -->
 <div class="modal-overlay" id="modal-zahlung">
   <div class="modal">
@@ -3077,16 +3131,56 @@
   </div>
 </div>
 
+<!-- Album Detail Modal -->
+<div class="modal-overlay" id="modal-album-view">
+  <div class="modal" style="width:700px;max-width:95vw">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px">
+      <div>
+        <h3 id="av-title" style="margin-bottom:4px">Album</h3>
+        <div style="font-size:0.78rem;color:var(--text3)" id="av-meta"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="action-btn" id="av-edit-btn" onclick="editAlbum(_openAlbumId)" title="Bearbeiten">✏️</button>
+        <button class="action-btn del" onclick="deleteAlbum(_openAlbumId)" title="Album löschen">🗑</button>
+        <button onclick="closeModal('modal-album-view')" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text3);padding:4px 6px">✕</button>
+      </div>
+    </div>
+    <div id="av-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:65vh;overflow-y:auto"></div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+      <button class="btn btn-ghost" style="font-size:0.8rem" onclick="document.getElementById('av-add-input').click()">+ Weitere Fotos hinzufügen</button>
+      <input type="file" id="av-add-input" accept="image/*" multiple style="display:none" onchange="addFotosToAlbum(this)">
+    </div>
+  </div>
+</div>
+
+<!-- Foto Batch Upload Modal -->
+<div class="modal-overlay" id="modal-foto-batch">
+  <div class="modal" style="width:580px">
+    <h3>📸 Fotos hochladen</h3>
+    <div id="foto-batch-thumbs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:16px;max-height:220px;overflow-y:auto;padding:2px"></div>
+    <div class="form-row"><label>Album-Beschreibung</label><input type="text" id="fb-beschr" placeholder="z.B. Rohbau Decke EG – KW 12"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-row"><label>Kategorie (für alle)</label><select id="fb-kat"></select></div>
+      <div class="form-row"><label>Datum</label><input type="date" id="fb-datum"></div>
+    </div>
+    <div id="foto-batch-progress" style="display:none;margin-top:8px">
+      <div style="font-size:0.82rem;color:var(--text3);margin-bottom:6px" id="foto-batch-progress-text">Lade hoch…</div>
+      <div style="background:var(--border);border-radius:4px;height:6px"><div id="foto-batch-bar" style="background:var(--accent);height:6px;border-radius:4px;width:0%;transition:width 0.3s"></div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-foto-batch');fotoBatchFiles=[]">Abbrechen</button>
+      <button id="foto-batch-btn" class="btn btn-primary" onclick="confirmBatchPhotos()">📸 Hochladen</button>
+    </div>
+  </div>
+</div>
+
 <!-- Foto Titel Modal -->
 <div class="modal-overlay" id="modal-foto-info">
   <div class="modal">
     <h3>Foto-Details</h3>
     <div class="form-row"><label>Titel</label><input type="text" id="fi-title" placeholder="z.B. Decke Betonage EG"></div>
     <div class="form-row"><label>Kategorie</label>
-      <select id="fi-kat">
-        <option>Rohbau</option><option>Dach</option><option>Fenster & Türen</option>
-        <option>Innenausbau</option><option>Außenanlagen</option><option>Sonstiges</option>
-      </select>
+      <select id="fi-kat"></select>
     </div>
     <div class="form-row"><label>Datum</label><input type="date" id="fi-datum"></div>
     <div class="modal-actions">
@@ -3201,9 +3295,10 @@ const EMPTY_PROJECT = () => ({
   settings: { name: 'Neues Projekt', type: 'Neubau', budget: 0, start: '', end: '', address: '', color: '#3d6ff8', modules: {} },
   kosten: [], eigenleistungen: [], budgetKat: [],
   meilensteine: [], aufgaben: [], tagebuch: [],
-  notizen: [], kontakte: [], gantt: [], fotos: [],
+  notizen: [], kontakte: [], gantt: [], fotos: [], fotoAlben: [],
   dokumentation: [], wartungen: [], abhaengigkeiten: [],
-  angebote: [], zahlungen: [], maengel: [], gescannteRechnungen: [], zahlungspersonen: []
+  angebote: [], zahlungen: [], maengel: [], gescannteRechnungen: [], zahlungspersonen: [],
+  dateien: []
 });
 
 let projects = [];      // array of all projects
@@ -3284,6 +3379,53 @@ function updateProjectHeader() {
   document.documentElement.style.setProperty('--accent-grad', `linear-gradient(135deg, ${color}, ${color}cc)`);
 }
 
+// ──────────────── EINMAL-HINWEISE ────────────────
+const PAGE_HINTS = {
+  dashboard:      'Dein Projektüberblick – Budget, Fortschritt, offene Aufgaben. Der KI-Bauberater analysiert alles auf Knopfdruck.',
+  kosten:         'Erfasse Ausgaben manuell oder scanne Rechnungen per Foto – die KI liest Betrag, Datum und Anbieter automatisch heraus.',
+  budget:         'Teile dein Budget auf Gewerke auf und sieh auf einen Blick, wo du über- oder unterschreitest.',
+  meilensteine:   'Definiere wichtige Bauphasen mit Terminen. Überfällige Meilensteine werden automatisch rot markiert.',
+  aufgaben:       'Deine Baustellenliste – Aufgaben mit Priorität, Fälligkeit und Status.',
+  tagebuch:       'Tagesberichte mit Mannschaft und Stunden. Das aktuelle Wetter wird beim Anlegen automatisch geladen (Adresse in Einstellungen nötig).',
+  dokumente:      'Notizen für schnelle Hinweise, plus Dokumentenablage für Baupläne, Genehmigungen und Verträge (max. 5 MB je Datei).',
+  kontakte:       'Alle Handwerker und Ansprechpartner – mit Gewerk, Telefon, E-Mail und Status.',
+  angebote:       'Vergleiche Angebote von Handwerkern und wandle das günstigste mit einem Klick direkt in eine Rechnung um.',
+  zahlungsplan:   'Plane Ratenzahlungen mit Fälligkeitsterminen. Wenn du eine Zahlung abhakst, wird die zugehörige Rechnung automatisch auf „Bezahlt" gesetzt.',
+  maengel:        'Dokumentiere Baumängel mit Fotos, Verantwortlichem und Behebungsdatum – wichtig für Gewährleistungsansprüche.',
+  fotos:          'Fotodokumentation nach Datum und Gewerk – ideal als Nachweis bei Übergabe oder bei Streitigkeiten.',
+  rechnungen:     'Hier findest du alle per KI eingescannten Rechnungen als Übersicht.',
+  kostenchart:    'Grafische Auswertung der Ausgaben nach Monat und Kategorie.',
+  kostenaufteilung: 'Zeigt wie das Budget auf die einzelnen Kostenstellen aufgeteilt ist.',
+  gantt:          'Zeitliche Übersicht aller Gewerke und Meilensteine als Gantt-Diagramm. Balken können per Drag & Drop verschoben werden.',
+  dokumentation:  'Technische Dokumentation für Einbauten, Materialien und Systeme – nützlich für spätere Wartungen.',
+  wartung:        'Wartungskalender für regelmäßige Prüfungen (Heizung, Aufzug, etc.) mit Intervallen und Erinnerungen.',
+  settings:       'Projektdaten anpassen, Budget-Kategorien verwalten, Module ein-/ausblenden und zwischen mehreren Projekten wechseln – Klick auf das Logo oben links.'
+};
+
+let _seenHints = new Set(JSON.parse(localStorage.getItem('buildora_seen_hints') || '[]'));
+
+function dismissHint(pageId) {
+  _seenHints.add(pageId);
+  localStorage.setItem('buildora_seen_hints', JSON.stringify([..._seenHints]));
+  const el = document.getElementById('page-hint-' + pageId);
+  if (el) { el.style.opacity = '0'; el.style.transform = 'translateY(-8px)'; setTimeout(() => el.remove(), 220); }
+}
+
+function showPageHint(pageId) {
+  if (_seenHints.has(pageId) || !PAGE_HINTS[pageId]) return;
+  const page = document.getElementById('page-' + pageId);
+  if (!page) return;
+  if (document.getElementById('page-hint-' + pageId)) return;
+  const bar = document.createElement('div');
+  bar.id = 'page-hint-' + pageId;
+  bar.style.cssText = 'display:flex;align-items:flex-start;gap:10px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:20px;font-size:0.82rem;color:var(--text2);line-height:1.5;transition:opacity 0.2s,transform 0.2s;opacity:0;transform:translateY(-8px)';
+  bar.innerHTML = `<span style="font-size:1rem;flex-shrink:0;margin-top:1px">💡</span><span style="flex:1">${PAGE_HINTS[pageId]}</span><button onclick="dismissHint('${pageId}')" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text3);padding:0;line-height:1;flex-shrink:0" title="Schließen">×</button>`;
+  const header = page.querySelector('.page-header');
+  if (header) header.insertAdjacentElement('afterend', bar);
+  else page.insertAdjacentElement('afterbegin', bar);
+  requestAnimationFrame(() => { bar.style.opacity = '1'; bar.style.transform = 'translateY(0)'; });
+}
+
 // ──────────────── NAVIGATION ────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3311,11 +3453,12 @@ function showPage(id) {
   if (id === 'dokumentation') renderDoku();
   if (id === 'wartung') renderWartung();
   if (id === 'settings') loadSettings();
+  showPageHint(id);
 }
 
 // ──────────────── UTILS ────────────────
 const fmt = (n) => '€ ' + Number(n).toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-AT') : '–';
+const fmtDate = (d) => { if (!d) return '–'; const dt = new Date(d); return isNaN(dt) ? '–' : dt.toLocaleDateString('de-AT'); };
 const today = () => new Date().toISOString().split('T')[0];
 
 function openModal(id) {
@@ -3329,6 +3472,10 @@ function openModal(id) {
   if (id === 'modal-kosten' || id === 'modal-eigenleistung' || id === 'modal-rechnung-scan') {
     const editId = document.getElementById('k-edit-id')?.value;
     if (!editId) refreshAllKatSelects();
+  }
+  // Tagebuch: auto-fetch weather for new entries
+  if (id === 'modal-tagebuch' && !document.getElementById('tb-edit-id')?.value) {
+    setTimeout(fetchWetter, 300);
   }
   // Project modals
   if (id === 'modal-project-switcher') renderProjectSwitcher();
@@ -3463,6 +3610,7 @@ function loadSettings() {
   renderModuleToggles();
   renderPersonenList();
   refreshBezahltVonSelects();
+  loadNotificationStatus();
   // Show account info
   if (currentUser) {
     const email = currentUser.email || '';
@@ -3598,6 +3746,7 @@ function updateKostenBrutto() {
   if (netto > 0) document.getElementById('k-betrag').value = brutto.toFixed(2);
   const mwstBetrag = brutto - netto;
   document.getElementById('k-mwst-preview').textContent = `Netto: ${fmt(netto)}  ·  MwSt (${mwst}%): ${fmt(mwstBetrag)}  ·  Brutto: ${fmt(brutto)}`;
+  updateSkontoPreview('k');
 }
 
 function updateKostenNetto() {
@@ -3605,6 +3754,7 @@ function updateKostenNetto() {
   const mwst = parseFloat(document.getElementById('k-mwst').value) || 0;
   const netto = mwst > 0 ? brutto / (1 + mwst / 100) : brutto;
   if (brutto > 0) document.getElementById('k-netto-input').value = netto.toFixed(2);
+  updateSkontoPreview('k');
   const mwstBetrag = brutto - netto;
   document.getElementById('k-mwst-preview').textContent = `Netto: ${fmt(netto)}  ·  MwSt (${mwst}%): ${fmt(mwstBetrag)}  ·  Brutto: ${fmt(brutto)}`;
 }
@@ -3640,13 +3790,6 @@ function refreshAllKatSelects(selectedVal = '', extraIds = []) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = getKatOptions(selectedVal);
   });
-  // foto-filter
-  const ff = document.getElementById('foto-filter');
-  if (ff) {
-    const cur = ff.value;
-    ff.innerHTML = `<option value="">Alle Kategorien</option>` + getKatList().map(k =>
-      `<option value="${k}" ${k === cur ? 'selected' : ''}>${k}</option>`).join('');
-  }
   // Extra selects (Angebote, Zahlungsplan etc.)
   extraIds.forEach(id => {
     const el = document.getElementById(id);
@@ -3660,6 +3803,8 @@ function saveKosten() {
   const mwstRate = parseFloat(document.getElementById('k-mwst').value) || 0;
   const brutto   = parseFloat(document.getElementById('k-betrag').value) || 0;
   const netto    = mwstRate > 0 ? brutto / (1 + mwstRate / 100) : brutto;
+  if (!document.getElementById('k-beschr').value.trim()) { showToast('⚠️ Bitte eine Beschreibung eingeben', 'error'); return; }
+  if (brutto <= 0) { showToast('⚠️ Betrag muss größer als 0 sein', 'error'); return; }
   const item = {
     id:      editId || Date.now(),
     datum:   document.getElementById('k-datum').value || today(),
@@ -3671,6 +3816,8 @@ function saveKosten() {
     status:  document.getElementById('k-status').value,
     bezahltVon: document.getElementById('k-bezahlt-von')?.value || '',
     anbieter: document.getElementById('k-anbieter').value,
+    skontoProz: parseFloat(document.getElementById('k-skonto-proz').value) || 0,
+    skontoBis:  document.getElementById('k-skonto-bis').value || '',
     aiScanned: editId ? (state.kosten.find(k => k.id === editId)?.aiScanned || false) : false
   };
 
@@ -3680,12 +3827,18 @@ function saveKosten() {
   } else {
     state.kosten.push(item);
   }
+  if (_pendingAngebotId && !editId) {
+    const ang = (state.angebote||[]).find(a => a.id === _pendingAngebotId);
+    if (ang) { ang.konvertiert = true; ang.status = 'Umgewandelt'; }
+    _pendingAngebotId = null;
+  }
   save();
   closeModal('modal-kosten');
   document.getElementById('k-edit-id').value = '';
   document.getElementById('k-modal-title').textContent = 'Ausgabe erfassen';
-  ['k-datum','k-beschr','k-betrag','k-netto-input','k-anbieter'].forEach(id => document.getElementById(id).value = '');
+  ['k-datum','k-beschr','k-betrag','k-netto-input','k-anbieter','k-skonto-proz','k-skonto-bis'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('k-mwst-preview').textContent = 'MwSt-Betrag: € 0,00';
+  document.getElementById('k-skonto-preview').style.display = 'none';
   renderKosten();
   renderBudget();
   showToast(editId ? '✏️ Ausgabe aktualisiert' : '✅ Ausgabe eingebucht', 'success');
@@ -3709,14 +3862,17 @@ function editKosten(id) {
   refreshBezahltVonSelects(k.bezahltVon || '');
   const bvSel = document.getElementById('k-bezahlt-von');
   if (bvSel) bvSel.value = k.bezahltVon || '';
+  document.getElementById('k-skonto-proz').value = k.skontoProz || '';
+  document.getElementById('k-skonto-bis').value  = k.skontoBis  || '';
   updateKostenBrutto();
+  updateSkontoPreview('k');
   openModal('modal-kosten');
 }
 
 function deleteKosten(id) {
   if (!confirm('Ausgabe löschen?')) return;
   state.kosten = state.kosten.filter(k => k.id !== id);
-  save(); renderKosten(); renderBudget();
+  save(); renderKosten(); renderBudget(); showToast('🗑 Ausgabe gelöscht', 'success');
 }
 
 // Compatibility shim (old calls still work)
@@ -3810,6 +3966,7 @@ function addEigenleistung() {
   ['el-datum','el-beschr','el-wert','el-von','el-notiz'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('el-edit-id')) document.getElementById('el-edit-id').value = '';
   if (document.getElementById('el-modal-title')) document.getElementById('el-modal-title').textContent = 'Eigenleistung erfassen';
+  showToast(editId ? '✏️ Eigenleistung aktualisiert' : '✅ Eigenleistung gespeichert', 'success');
   renderKosten();
 }
 
@@ -3831,7 +3988,7 @@ function editEigenleistung(id) {
 function deleteEigenleistung(id) {
   if (!confirm('Eigenleistung löschen?')) return;
   state.eigenleistungen = (state.eigenleistungen||[]).filter(e => e.id !== id);
-  save(); renderKosten();
+  save(); renderKosten(); showToast('🗑 Eigenleistung gelöscht', 'success');
 }
 
 function renderKosten() {
@@ -3867,10 +4024,18 @@ function renderKosten() {
       const netto = k.netto ?? k.betrag;
       const mwstBetrag = k.betrag - netto;
       const mwstLabel = k.mwst > 0 ? `<span class="badge badge-yellow" style="font-size:0.65rem">${k.mwst}%</span>` : `<span class="badge badge-gray" style="font-size:0.65rem">0%</span>`;
+      const nowD = new Date(); nowD.setHours(0,0,0,0);
+      let skontoBadge = '';
+      if (k.skontoProz > 0 && k.skontoBis && k.status === 'Ausstehend') {
+        const diff = Math.ceil((new Date(k.skontoBis) - nowD) / 86400000);
+        if (diff < 0) skontoBadge = `<span class="badge badge-red" style="font-size:0.62rem;margin-left:4px" title="Skonto-Frist abgelaufen">💰 Skonto abgelaufen</span>`;
+        else if (diff <= 7) skontoBadge = `<span class="badge badge-yellow" style="font-size:0.62rem;margin-left:4px" title="Skonto bis ${fmtDate(k.skontoBis)}">💰 Skonto noch ${diff}d!</span>`;
+        else skontoBadge = `<span class="badge badge-gray" style="font-size:0.62rem;margin-left:4px" title="Skonto bis ${fmtDate(k.skontoBis)}">💰 ${k.skontoProz}%</span>`;
+      }
       return `<tr>
         <td style="font-family:'JetBrains Mono',monospace;font-size:0.78rem">${fmtDate(k.datum)}</td>
         <td><span class="badge badge-gray">${k.kat}</span></td>
-        <td>${k.beschr}${k.anbieter?`<br><span style="font-size:0.75rem;color:var(--text3)">${k.anbieter}</span>`:''}${k.aiScanned?`<span class="badge badge-purple" style="margin-left:6px;font-size:0.6rem">🤖 KI</span>`:''}</td>
+        <td>${k.beschr}${k.anbieter?`<br><span style="font-size:0.75rem;color:var(--text3)">${k.anbieter}</span>`:''}${k.aiScanned?`<span class="badge badge-purple" style="margin-left:6px;font-size:0.6rem">🤖 KI</span>`:''}${skontoBadge}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:0.82rem">${fmt(netto)}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text3)">${mwstBetrag > 0 ? fmt(mwstBetrag) : '–'} ${mwstLabel}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-weight:600">${fmt(k.betrag)}</td>
@@ -4010,7 +4175,7 @@ function editBudgetKat(id) {
 function deleteBudgetKat(id) {
   if (!confirm('Kategorie löschen?')) return;
   state.budgetKat = state.budgetKat.filter(k => k.id !== id);
-  save(); renderBudget();
+  save(); renderBudget(); showToast('🗑 Kategorie gelöscht', 'success');
 }
 
 const BG_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#84cc16'];
@@ -4139,6 +4304,18 @@ function resetScanModal() {
   document.getElementById('scan-confirm-btn').style.display = 'none';
   document.getElementById('scan-upload-area').style.display = 'block';
   document.getElementById('scan-file-input').value = '';
+  document.getElementById('scan-skonto-proz').value = '';
+  document.getElementById('scan-skonto-bis').value  = '';
+  document.getElementById('scan-skonto-preview').style.display = 'none';
+}
+
+function toggleBezahltVon(statusId, bezahltVonId) {
+  const status = document.getElementById(statusId).value;
+  const sel = document.getElementById(bezahltVonId);
+  const bezahlt = status === 'Bezahlt';
+  sel.disabled = !bezahlt;
+  if (!bezahlt) sel.value = '';
+  sel.closest('.form-row').style.opacity = bezahlt ? '1' : '0.4';
 }
 
 function scanUpdateBrutto() {
@@ -4147,25 +4324,184 @@ function scanUpdateBrutto() {
   document.getElementById('scan-brutto').value = (n * (1 + m/100)).toFixed(2);
 }
 
+function updateSkontoPreview(prefix) {
+  const proz   = parseFloat(document.getElementById(`${prefix}-skonto-proz`).value) || 0;
+  const bis    = document.getElementById(`${prefix}-skonto-bis`).value;
+  const brutto = parseFloat(document.getElementById(prefix === 'k' ? 'k-betrag' : 'scan-brutto').value) || 0;
+  const preview = document.getElementById(`${prefix}-skonto-preview`);
+  if (proz > 0 && bis && brutto > 0) {
+    const ersparnis = brutto * proz / 100;
+    document.getElementById(`${prefix}-skonto-date-txt`).textContent  = fmtDate(bis);
+    document.getElementById(`${prefix}-skonto-save-txt`).textContent  = fmt(ersparnis);
+    document.getElementById(`${prefix}-skonto-total-txt`).textContent = fmt(brutto - ersparnis);
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function checkSkontoDeadlines() {
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const urgent = (state.kosten||[]).filter(k =>
+    k.skontoProz > 0 && k.skontoBis && k.status === 'Ausstehend' &&
+    Math.ceil((new Date(k.skontoBis) - today0) / 86400000) <= 3 &&
+    Math.ceil((new Date(k.skontoBis) - today0) / 86400000) >= 0
+  );
+  urgent.forEach(k => {
+    const diff = Math.ceil((new Date(k.skontoBis) - today0) / 86400000);
+    const ersparnis = fmt(k.betrag * k.skontoProz / 100);
+    showToast(`💰 Skonto bei „${k.beschr}": ${ersparnis} sparen – noch ${diff} Tag${diff===1?'':'e'}!`, 'warning', 6000);
+  });
+}
+
+function checkAllDeadlines() {
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const msgs = [];
+
+  // Fällige Zahlungen in 3 Tagen
+  (state.zahlungen||[]).filter(z => z.status !== 'Bezahlt' && z.faellig).forEach(z => {
+    const diff = Math.ceil((new Date(z.faellig) - today0) / 86400000);
+    if (diff >= 0 && diff <= 3) msgs.push(`💳 Zahlung fällig in ${diff}d: ${z.beschr||'Zahlung'} (${fmt(z.betrag)})`);
+    else if (diff < 0) msgs.push(`⚠️ Zahlung überfällig (${Math.abs(diff)}d): ${z.beschr||'Zahlung'} (${fmt(z.betrag)})`);
+  });
+
+  // Überfällige Meilensteine
+  (state.meilensteine||[]).filter(m => !m.done && m.end).forEach(m => {
+    const diff = Math.ceil((new Date(m.end) - today0) / 86400000);
+    if (diff < 0) msgs.push(`🚩 Meilenstein überfällig: ${m.title}`);
+    else if (diff <= 3) msgs.push(`⏰ Meilenstein in ${diff}d fällig: ${m.title}`);
+  });
+
+  // Skonto
+  (state.kosten||[]).filter(k => k.skontoProz > 0 && k.skontoBis && k.status === 'Ausstehend').forEach(k => {
+    const diff = Math.ceil((new Date(k.skontoBis) - today0) / 86400000);
+    if (diff >= 0 && diff <= 3) msgs.push(`💰 Skonto läuft ab in ${diff}d: ${k.beschr} (${fmt(k.betrag * k.skontoProz / 100)} sparen)`);
+  });
+
+  if (msgs.length === 0) return;
+
+  // Browser-Notification wenn erlaubt
+  if (Notification.permission === 'granted') {
+    msgs.forEach((msg, i) => setTimeout(() => new Notification('Buildora', { body: msg, icon: '/favicon.ico' }), i * 800));
+  } else {
+    // Fallback: Toast-Nachrichten gestaffelt
+    msgs.forEach((msg, i) => setTimeout(() => showToast(msg, 'warning', 6000), i * 1200 + 1500));
+  }
+}
+
+async function requestNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') await Notification.requestPermission();
+  checkAllDeadlines();
+}
+
+async function enableNotifications() {
+  if (!('Notification' in window)) { showToast('⚠️ Dein Browser unterstützt keine Mitteilungen', 'error'); return; }
+  const perm = await Notification.requestPermission();
+  loadNotificationStatus();
+  if (perm === 'granted') {
+    new Notification('Buildora', { body: '✅ Mitteilungen sind jetzt aktiv!' });
+    showToast('🔔 Mitteilungen aktiviert', 'success');
+  } else {
+    showToast('⚠️ Mitteilungen wurden nicht erlaubt', 'error');
+  }
+}
+
+
+function loadNotificationStatus() {
+  const label  = document.getElementById('notif-status-label');
+  const badge  = document.getElementById('notif-status-badge');
+  const btn    = document.getElementById('notif-allow-btn');
+  if (!label || !badge) return;
+  if (!('Notification' in window)) {
+    label.textContent = 'Nicht unterstützt';
+    badge.textContent = 'N/A'; badge.className = 'badge badge-gray';
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') {
+    label.textContent = 'Mitteilungen sind aktiv';
+    badge.textContent = '✅ Erlaubt'; badge.className = 'badge badge-green';
+    if (btn) btn.style.display = 'none';
+  } else if (p === 'denied') {
+    label.textContent = 'Mitteilungen sind blockiert';
+    badge.textContent = '🚫 Blockiert'; badge.className = 'badge badge-red';
+    if (btn) { btn.textContent = '⚙️ Browser-Einstellungen öffnen'; btn.onclick = () => showToast('Bitte in den Browser-Einstellungen → Datenschutz → Benachrichtigungen für diese Seite erlauben', 'warning', 8000); }
+  } else {
+    label.textContent = 'Noch nicht aktiviert';
+    badge.textContent = '○ Inaktiv'; badge.className = 'badge badge-yellow';
+    if (btn) btn.style.display = '';
+  }
+}
+
+function togglePrivacy() {
+  const on  = document.body.classList.toggle('privacy-mode');
+  const btn = document.getElementById('privacy-btn');
+  if (!btn) return;
+  btn.textContent       = on ? '🙈 Einblenden' : '👁 Zahlen ausblenden';
+  btn.style.background  = on ? 'var(--accent)' : '';
+  btn.style.color       = on ? 'white' : '';
+  btn.style.borderColor = on ? 'var(--accent)' : '';
+}
+
+function toggleKIPanel() {
+  const panel = document.getElementById('ki-advisor-panel');
+  const btn   = document.getElementById('ki-panel-btn');
+  if (!panel || !btn) return;
+  const hidden = panel.style.display === 'none';
+  panel.style.display   = hidden ? '' : 'none';
+  btn.textContent       = hidden ? '🤖 KI ausblenden' : '🤖 KI anzeigen';
+  btn.style.background  = hidden ? '' : 'var(--accent)';
+  btn.style.color       = hidden ? '' : 'white';
+  btn.style.borderColor = hidden ? '' : 'var(--accent)';
+}
+
+function sendStatusReport() {
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const proj = state.settings?.name || 'Mein Projekt';
+  const budget = state.budgetKat?.reduce((s,k) => s+(k.budget||0), 0) || state.settings?.budget || 0;
+  const spent = state.kosten.filter(k=>k.status!=='Storniert').reduce((s,k)=>s+(parseFloat(k.betrag)||0),0);
+  const remaining = budget - spent;
+  const pct = budget > 0 ? Math.round(spent/budget*100) : 0;
+  const doneMil = state.meilensteine.filter(m=>m.done).length;
+  const allMil = state.meilensteine.length;
+  const offeneZahl = state.zahlungen.filter(z=>z.status!=='Bezahlt').reduce((s,z)=>s+(parseFloat(z.betrag)||0),0);
+  const offeneMaengel = state.maengel.filter(m=>m.status!=='Behoben').length;
+  const nextMil = [...state.meilensteine].filter(m=>!m.done&&m.end).sort((a,b)=>new Date(a.end)-new Date(b.end))[0];
+  const nextZahl = [...state.zahlungen].filter(z=>z.status!=='Bezahlt'&&z.faellig).sort((a,b)=>new Date(a.faellig)-new Date(b.faellig))[0];
+
+  const lines = [
+    `STATUSBERICHT – ${proj}`,
+    `Stand: ${new Date().toLocaleDateString('de-AT')}`,
+    ``,
+    `BUDGET`,
+    `  Geplant:    ${fmt(budget)}`,
+    `  Ausgegeben: ${fmt(spent)} (${pct}%)`,
+    `  Verfügbar:  ${fmt(remaining)}`,
+    ``,
+    `MEILENSTEINE`,
+    `  Abgeschlossen: ${doneMil} von ${allMil}`,
+    nextMil ? `  Nächster:      ${nextMil.title} (${new Date(nextMil.end).toLocaleDateString('de-AT')})` : `  Nächster:      –`,
+    ``,
+    `ZAHLUNGSPLAN`,
+    `  Noch offen: ${fmt(offeneZahl)}`,
+    nextZahl ? `  Nächste Fälligkeit: ${nextZahl.beschr||'Zahlung'} am ${new Date(nextZahl.faellig).toLocaleDateString('de-AT')} (${fmt(nextZahl.betrag)})` : `  Nächste Fälligkeit: –`,
+    ``,
+    `MÄNGEL`,
+    `  Offen: ${offeneMaengel}`,
+    ``,
+    `–– Erstellt mit Buildora ––`
+  ].join('\n');
+
+  const subject = encodeURIComponent(`Statusbericht ${proj} – ${new Date().toLocaleDateString('de-AT')}`);
+  const body = encodeURIComponent(lines);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
 async function handleRechnungScan(input) {
   const file = input.files[0];
   if (!file) return;
-
-  // Show preview for images
-  if (file.type.startsWith('image/')) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      scanImageBase64 = e.target.result.split(',')[1];
-      document.getElementById('scan-preview-img').src = e.target.result;
-      document.getElementById('scan-preview').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
-  } else {
-    // PDF – read as base64
-    const reader = new FileReader();
-    reader.onload = e => { scanImageBase64 = e.target.result.split(',')[1]; };
-    reader.readAsDataURL(file);
-  }
 
   document.getElementById('scan-upload-area').style.display = 'none';
   document.getElementById('scan-loading').style.display = 'block';
@@ -4173,8 +4509,20 @@ async function handleRechnungScan(input) {
   document.getElementById('scan-error').style.display   = 'none';
   document.getElementById('scan-confirm-btn').style.display = 'none';
 
-  // Wait for file read
-  await new Promise(r => setTimeout(r, 600));
+  // Read file as base64 and wait until done
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  scanImageBase64 = dataUrl.split(',')[1];
+
+  if (file.type.startsWith('image/')) {
+    document.getElementById('scan-preview-img').src = dataUrl;
+    document.getElementById('scan-preview').style.display = 'block';
+  }
 
   try {
     const isImage = file.type.startsWith('image/');
@@ -4184,7 +4532,7 @@ async function handleRechnungScan(input) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1000,
         messages: [{
           role: 'user',
@@ -4204,6 +4552,8 @@ async function handleRechnungScan(input) {
   "mwst_prozent": 20,
   "brutto": 0.00,
   "kategorie": "Eine von: Rohbau, Dach, Fenster & Türen, Elektro, Sanitär, Heizung, Innenausbau, Außenanlagen, Sonstiges",
+  "skonto_prozent": 0,
+  "skonto_bis": "YYYY-MM-DD oder null wenn kein Skonto angegeben",
   "hinweis": "Kurzer Hinweis zur Erkennung oder was auffällig ist (optional)"
 }`
             }
@@ -4224,6 +4574,9 @@ async function handleRechnungScan(input) {
     document.getElementById('scan-netto').value     = parsed.netto        || '';
     document.getElementById('scan-brutto').value    = parsed.brutto       || '';
     document.getElementById('scan-ki-notiz').textContent = parsed.hinweis ? `💡 KI-Hinweis: ${parsed.hinweis}` : '';
+    document.getElementById('scan-skonto-proz').value = parsed.skonto_prozent || '';
+    document.getElementById('scan-skonto-bis').value  = (parsed.skonto_bis && parsed.skonto_bis !== 'null') ? parsed.skonto_bis : '';
+    updateSkontoPreview('scan');
 
     // Set MwSt
     const mwstSel = document.getElementById('scan-mwst');
@@ -4239,9 +4592,10 @@ async function handleRechnungScan(input) {
     document.getElementById('scan-confirm-btn').style.display = 'inline-flex';
 
   } catch(e) {
+    console.error('Scan Fehler:', e);
     document.getElementById('scan-loading').style.display = 'none';
     document.getElementById('scan-error').style.display   = 'block';
-    document.getElementById('scan-error').textContent     = '⚠️ Rechnung konnte nicht ausgelesen werden. Bitte manuell eingeben oder anderes Bild versuchen.';
+    document.getElementById('scan-error').textContent     = '⚠️ Fehler: ' + e.message;
     document.getElementById('scan-upload-area').style.display = 'block';
   }
 }
@@ -4288,6 +4642,8 @@ async function confirmRechnungScan() {
     status:    document.getElementById('scan-status').value,
     bezahltVon: document.getElementById('scan-bezahlt-von')?.value || '',
     anbieter:  document.getElementById('scan-anbieter').value,
+    skontoProz: parseFloat(document.getElementById('scan-skonto-proz').value) || 0,
+    skontoBis:  document.getElementById('scan-skonto-bis').value || '',
     aiScanned: true,
     scanUrl,
     scanPath
@@ -4342,6 +4698,7 @@ function addMilestone() {
   if (document.getElementById('ms-edit-id')) document.getElementById('ms-edit-id').value = '';
   document.getElementById('ms-modal-title') && (document.getElementById('ms-modal-title').textContent = 'Meilenstein hinzufügen');
   renderMilestones();
+  showToast(editId ? '✏️ Meilenstein aktualisiert' : '✅ Meilenstein gespeichert', 'success');
 }
 
 function editMilestone(id) {
@@ -4357,14 +4714,14 @@ function editMilestone(id) {
 
 function toggleMilestone(id) {
   const m = state.meilensteine.find(m => m.id === id);
-  if (m) m.done = !m.done;
+  if (m) { m.done = !m.done; showToast(m.done ? '✅ Meilenstein abgehakt' : '↩️ Meilenstein wieder offen', 'success'); }
   save(); renderMilestones();
 }
 
 function deleteMilestone(id) {
   if (!confirm('Meilenstein löschen?')) return;
   state.meilensteine = state.meilensteine.filter(m => m.id !== id);
-  save(); renderMilestones();
+  save(); renderMilestones(); showToast('🗑 Meilenstein gelöscht', 'success');
 }
 
 function renderMilestones() {
@@ -4381,7 +4738,7 @@ function renderMilestones() {
         ${m.datum?`<div class="milestone-date">📅 ${fmtDate(m.datum)}</div>`:''}
         ${m.text?`<div style="font-size:0.78rem;color:var(--text3);margin-top:3px">${m.text}</div>`:''}
       </div>
-      <span class="badge ${m.done?'badge-green':'badge-yellow'}">${m.done?'Erledigt':'Offen'}</span>
+      <span class="badge ${m.done ? 'badge-green' : (m.datum && m.datum < today() ? 'badge-red' : 'badge-yellow')}">${m.done ? 'Erledigt' : (m.datum && m.datum < today() ? '⚠️ Überfällig' : 'Offen')}</span>
       <button class="action-btn" onclick="editMilestone(${m.id})" title="Bearbeiten">✏️</button>
       <button class="action-btn del" onclick="deleteMilestone(${m.id})">🗑</button>
     </div>`).join('');
@@ -4411,6 +4768,37 @@ function addTask() {
   renderTasks();
 }
 
+function saveTask() {
+  const editId = parseInt(document.getElementById('t-edit-id').value) || null;
+  const name = document.getElementById('t-name').value.trim();
+  if (!name) { showToast('⚠️ Bitte eine Aufgabe eingeben', 'error'); return; }
+  const item = {
+    id:     editId || Date.now(),
+    name,
+    prio:   document.getElementById('t-prio').value,
+    datum:  document.getElementById('t-datum').value || '',
+    notiz:  document.getElementById('t-notiz').value || '',
+    status: editId ? (state.aufgaben.find(t => t.id === editId)?.status || 'Offen') : 'Offen'
+  };
+  if (editId) {
+    const idx = state.aufgaben.findIndex(t => t.id === editId);
+    if (idx > -1) state.aufgaben[idx] = item;
+  } else {
+    state.aufgaben.push(item);
+  }
+  save();
+  closeModal('modal-task');
+  resetTaskModal();
+  renderTasks();
+  showToast(editId ? '✏️ Aufgabe aktualisiert' : '✅ Aufgabe gespeichert', 'success');
+}
+
+function resetTaskModal() {
+  ['t-name','t-datum','t-notiz'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('t-edit-id').value = '';
+  document.getElementById('t-modal-title').textContent = 'Aufgabe hinzufügen';
+}
+
 function editTask(id) {
   const t = state.aufgaben.find(t => t.id === id);
   if (!t) return;
@@ -4426,14 +4814,14 @@ function editTask(id) {
 
 function toggleTask(id) {
   const t = state.aufgaben.find(t => t.id === id);
-  if (t) t.status = t.status === 'Erledigt' ? 'Offen' : 'Erledigt';
+  if (t) { t.status = t.status === 'Erledigt' ? 'Offen' : 'Erledigt'; showToast(t.status === 'Erledigt' ? '✅ Aufgabe erledigt' : '↩️ Aufgabe wieder offen', 'success'); }
   save(); renderTasks();
 }
 
 function deleteTask(id) {
   if (!confirm('Aufgabe löschen?')) return;
   state.aufgaben = state.aufgaben.filter(t => t.id !== id);
-  save(); renderTasks();
+  save(); renderTasks(); showToast('🗑 Aufgabe gelöscht', 'success');
 }
 
 let taskFilter = 'all';
@@ -4588,6 +4976,7 @@ function addDiary() {
     title:   document.getElementById('tb-title').value || 'Eintrag',
     text:    document.getElementById('tb-text').value,
     weather: document.getElementById('tb-weather').value,
+    temp:    document.getElementById('tb-temp').value ? parseFloat(document.getElementById('tb-temp').value) : null,
     tags:    document.getElementById('tb-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
     workers
   };
@@ -4598,7 +4987,8 @@ function addDiary() {
     state.tagebuch.push(item);
   }
   save(); closeModal('modal-tagebuch');
-  ['tb-datum','tb-title','tb-text','tb-tags'].forEach(id => document.getElementById(id).value = '');
+  showToast(editId ? '✏️ Eintrag aktualisiert' : '✅ Tagebucheintrag gespeichert', 'success');
+  ['tb-datum','tb-title','tb-text','tb-tags','tb-temp'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('tb-worker-rows').innerHTML = '';
   if (document.getElementById('tb-edit-id')) document.getElementById('tb-edit-id').value = '';
   if (document.getElementById('tb-modal-title')) document.getElementById('tb-modal-title').textContent = 'Tagebucheintrag';
@@ -4614,6 +5004,7 @@ function editDiary(id) {
   document.getElementById('tb-tags').value   = (e.tags||[]).join(', ');
   const wSel = document.getElementById('tb-weather');
   Array.from(wSel.options).forEach(o => { if (o.value === e.weather) o.selected = true; });
+  document.getElementById('tb-temp').value = e.temp != null ? e.temp : '';
   // Restore workers
   const container = document.getElementById('tb-worker-rows');
   container.innerHTML = '';
@@ -4635,6 +5026,45 @@ function deleteDiary(id) {
   if (!confirm('Eintrag löschen?')) return;
   state.tagebuch = state.tagebuch.filter(e => e.id !== id);
   save(); renderDiary();
+  showToast('🗑 Eintrag gelöscht', 'success');
+}
+
+async function fetchWetter() {
+  const btn = document.getElementById('tb-wetter-btn');
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const address = state.settings?.address || '';
+    const city = address.split(',').pop()?.trim() || address.split(' ')[0] || '';
+    if (!city) { showToast('⚠️ Bitte zuerst eine Projektadresse in den Einstellungen eintragen', 'error'); btn.textContent='🌡️ Abrufen'; btn.disabled=false; return; }
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=de&format=json`);
+    const geoData = await geoRes.json();
+    const loc = geoData.results?.[0];
+    if (!loc) { showToast('⚠️ Ort nicht gefunden', 'error'); btn.textContent='🌡️ Abrufen'; btn.disabled=false; return; }
+    const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=weathercode,temperature_2m&timezone=auto`);
+    const wxData = await wxRes.json();
+    const code = wxData.current?.weathercode ?? -1;
+    const temp = wxData.current?.temperature_2m ?? null;
+    const wxMap = [
+      [0,1,'☀️ Sonnig'],[2,3,'⛅ Bewölkt'],[45,48,'⛅ Bewölkt'],
+      [51,55,'🌧️ Regen'],[61,65,'🌧️ Regen'],[80,82,'🌧️ Regen'],
+      [71,77,'❄️ Schnee'],[85,86,'❄️ Schnee'],
+      [95,99,'⛈️ Gewitter']
+    ];
+    let label = '⛅ Bewölkt';
+    for (const [min,max,lbl] of wxMap) { if (code >= min && code <= max) { label = lbl; break; } }
+    const wSel = document.getElementById('tb-weather');
+    let matched = false;
+    Array.from(wSel.options).forEach(o => { if (o.value === label) { o.selected = true; matched = true; } });
+    if (!matched) {
+      const opt = new Option(label, label);
+      wSel.add(opt); wSel.value = label;
+    }
+    if (temp != null) document.getElementById('tb-temp').value = Math.round(temp * 10) / 10;
+    showToast(`🌡️ ${loc.name}: ${label} · ${temp}°C`, 'success');
+  } catch(e) {
+    showToast('⚠️ Wetter konnte nicht geladen werden', 'error');
+  }
+  btn.textContent = '🌡️ Abrufen'; btn.disabled = false;
 }
 
 function renderDiary() {
@@ -4652,9 +5082,9 @@ function renderDiary() {
         <button class="action-btn" onclick="editDiary(${e.id})" title="Bearbeiten">✏️</button>
         <button class="action-btn del" onclick="deleteDiary(${e.id})">🗑</button>
       </div>
-      <div class="diary-date">${fmtDate(e.datum)} · ${e.weather}</div>
+      <div class="diary-date">${fmtDate(e.datum)} · ${e.weather}${e.temp != null ? ` · ${e.temp}°C` : ''}</div>
       <div class="diary-title">${e.title}</div>
-      <div class="diary-text">${e.text.replace(/\n/g,'<br>')}</div>
+      <div class="diary-text">${(e.text||'').replace(/\n/g,'<br>')}</div>
       ${workers.length ? `
         <div style="margin-top:12px;background:var(--surface2);border-radius:8px;padding:12px">
           <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">
@@ -4668,7 +5098,7 @@ function renderDiary() {
               </div>`).join('')}
           </div>
         </div>` : ''}
-      ${e.tags.length ? `<div class="diary-tags">${e.tags.map(t=>`<span class="badge badge-gray">${t}</span>`).join('')}</div>` : ''}
+      ${(e.tags||[]).length ? `<div class="diary-tags">${(e.tags||[]).map(t=>`<span class="badge badge-gray">${t}</span>`).join('')}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -4838,6 +5268,7 @@ function addNotiz() {
     state.notizen.push(item);
   }
   save(); closeModal('modal-notiz');
+  showToast(editId ? '✏️ Notiz aktualisiert' : '✅ Notiz gespeichert', 'success');
   ['n-title','n-text'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('n-edit-id')) document.getElementById('n-edit-id').value = '';
   if (document.getElementById('n-modal-title')) document.getElementById('n-modal-title').textContent = 'Notiz hinzufügen';
@@ -4860,23 +5291,101 @@ function deleteNotiz(id) {
   if (!confirm('Notiz löschen?')) return;
   state.notizen = state.notizen.filter(n => n.id !== id);
   save(); renderNotizen();
+  showToast('🗑 Notiz gelöscht', 'success');
 }
 
 function renderNotizen() {
   const el = document.getElementById('notiz-list');
   if (state.notizen.length === 0) {
     el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📎</div><p>Keine Notizen</p></div>`;
+  } else {
+    el.innerHTML = [...state.notizen].reverse().map(n => `
+      <div class="card" style="background:${n.color};position:relative">
+        <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px">
+          <button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
+          <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}</div>
+        <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:56px;color:var(--text)">${n.title}</div>
+        <div style="font-size:0.82rem;color:var(--text2);line-height:1.55;white-space:pre-wrap">${n.text}</div>
+      </div>`).join('');
+  }
+  renderDokumente();
+}
+
+const DATEI_KAT = ['Bauplan','Genehmigung','Vertrag','Kostenvoranschlag','Rechnung','Foto','Sonstiges'];
+const DATEI_ICON = { pdf:'📄', image:'🖼️', word:'📝', excel:'📊', default:'📁' };
+
+function dateiIcon(type) {
+  if (type.includes('pdf')) return '📄';
+  if (type.startsWith('image/')) return '🖼️';
+  if (type.includes('word') || type.includes('doc')) return '📝';
+  if (type.includes('sheet') || type.includes('excel') || type.includes('xls')) return '📊';
+  return '📁';
+}
+
+function dateiGroesse(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+async function uploadDokument(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Datei zu groß (max. 5 MB)', 'error'); input.value=''; return; }
+  const data = await new Promise((res, rej) => {
+    const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+  });
+  const kat = prompt(`Kategorie wählen:\n${DATEI_KAT.map((k,i)=>`${i+1}. ${k}`).join('\n')}\n\nNummer eingeben (1–${DATEI_KAT.length}):`, '7');
+  const katName = DATEI_KAT[(parseInt(kat)||7) - 1] || 'Sonstiges';
+  state.dateien = state.dateien || [];
+  state.dateien.push({ id: Date.now(), name: file.name, type: file.type, size: file.size, kat: katName, datum: today(), data });
+  save(); input.value = '';
+  renderDokumente();
+  showToast('📎 Dokument gespeichert', 'success');
+}
+
+function downloadDokument(id) {
+  const d = (state.dateien||[]).find(d => d.id === id);
+  if (!d) return;
+  const a = document.createElement('a');
+  a.href = d.data; a.download = d.name; a.click();
+}
+
+function deleteDokument(id) {
+  if (!confirm('Dokument löschen?')) return;
+  state.dateien = (state.dateien||[]).filter(d => d.id !== id);
+  save(); renderDokumente();
+  showToast('🗑 Dokument gelöscht', 'success');
+}
+
+function renderDokumente() {
+  const el = document.getElementById('datei-list');
+  if (!el) return;
+  state.dateien = state.dateien || [];
+  const section = document.getElementById('datei-section');
+  if (state.dateien.length === 0) {
+    el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📁</div><p>Noch keine Dokumente – lade Baupläne, Verträge oder Genehmigungen hoch</p></div>`;
+    section.style.display = 'block';
     return;
   }
-  el.innerHTML = [...state.notizen].reverse().map(n => `
-    <div class="card" style="background:${n.color};position:relative">
-      <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px">
-        <button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
-        <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>
+  section.style.display = 'block';
+  el.innerHTML = [...state.dateien].reverse().map(d => `
+    <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <span style="font-size:1.8rem;line-height:1">${dateiIcon(d.type)}</span>
+        <div style="display:flex;gap:4px">
+          <button class="action-btn" onclick="downloadDokument(${d.id})" title="Herunterladen">⬇️</button>
+          <button class="action-btn del" onclick="deleteDokument(${d.id})" title="Löschen">🗑</button>
+        </div>
       </div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}</div>
-      <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:56px;color:var(--text)">${n.title}</div>
-      <div style="font-size:0.82rem;color:var(--text2);line-height:1.55;white-space:pre-wrap">${n.text}</div>
+      <div style="font-size:0.84rem;font-weight:700;color:var(--text);word-break:break-all;line-height:1.3">${d.name}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge badge-gray" style="font-size:0.65rem">${d.kat}</span>
+        <span style="font-size:0.72rem;color:var(--text3)">${dateiGroesse(d.size)}</span>
+        <span style="font-size:0.72rem;color:var(--text3)">${fmtDate(d.datum)}</span>
+      </div>
     </div>`).join('');
 }
 
@@ -4899,6 +5408,7 @@ function addKontakt() {
     state.kontakte.push(item);
   }
   save(); closeModal('modal-kontakt');
+  showToast(editId ? '✏️ Kontakt aktualisiert' : '✅ Kontakt gespeichert', 'success');
   ['c-name','c-tel','c-mail','c-notiz'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('c-edit-id')) document.getElementById('c-edit-id').value = '';
   document.getElementById('c-modal-title') && (document.getElementById('c-modal-title').textContent = 'Kontakt hinzufügen');
@@ -4923,8 +5433,13 @@ function editKontakt(id) {
 
 function deleteKontakt(id) {
   if (!confirm('Kontakt löschen?')) return;
+  const k = state.kontakte.find(k => k.id === id);
+  if (k && k.firma) {
+    (state.angebote||[]).forEach(a => { if (a.anbieter === k.firma) a.anbieter = ''; });
+  }
   state.kontakte = state.kontakte.filter(k => k.id !== id);
   save(); renderKontakte();
+  showToast('🗑 Kontakt gelöscht', 'success');
 }
 
 function renderKontakte() {
@@ -4978,6 +5493,7 @@ function saveGanttItem() {
     state.gantt.push(item);
   }
   save(); closeModal('modal-gantt'); resetGanttModal();
+  showToast(editId ? '✏️ Phase aktualisiert' : '✅ Phase gespeichert', 'success');
   ['g-name','g-start','g-end','g-notiz'].forEach(id => document.getElementById(id).value = '');
   renderGantt();
 }
@@ -5000,6 +5516,7 @@ function deleteGanttItem(id) {
   if (!confirm('Eintrag löschen?')) return;
   state.gantt = state.gantt.filter(g => g.id !== id);
   save(); renderGantt();
+  showToast('🗑 Phase gelöscht', 'success');
 }
 
 function ganttZoom(dir) {
@@ -5028,8 +5545,13 @@ function renderGantt() {
   }
 
   // Determine date range (add padding)
-  const allStarts = state.gantt.map(g => new Date(g.start));
-  const allEnds   = state.gantt.map(g => new Date(g.end));
+  const validGantt = state.gantt.filter(g => g.start && g.end && !isNaN(new Date(g.start)) && !isNaN(new Date(g.end)));
+  if (validGantt.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="icon">📅</div><p>Noch keine gültigen Einträge – füge Phasen mit Start- und Enddatum hinzu!</p></div>`;
+    return;
+  }
+  const allStarts = validGantt.map(g => new Date(g.start));
+  const allEnds   = validGantt.map(g => new Date(g.end));
   let minD = new Date(Math.min(...allStarts));
   let maxD = new Date(Math.max(...allEnds));
   minD = new Date(minD.getFullYear(), minD.getMonth(), 1);
@@ -5048,7 +5570,7 @@ function renderGantt() {
     cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
   }
 
-  const sorted = [...state.gantt].sort((a,b) => new Date(a.start) - new Date(b.start));
+  const sorted = [...validGantt].sort((a,b) => new Date(a.start) - new Date(b.start));
 
   const barColors = {
     phase_Offen:     '#3d6ff8',
@@ -5238,15 +5760,30 @@ function initGanttDrag(minD) {
 const STORAGE_BUCKET = 'buildora-fotos';
 
 async function uploadPhotoToStorage(file, folder = 'galerie') {
-  if (!currentUser) throw new Error('Nicht eingeloggt');
-  const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
-  const fileName = `${currentUser.id}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const { data, error } = await supa.storage
-    .from(STORAGE_BUCKET)
-    .upload(fileName, file, { cacheControl: '3600', upsert: false });
-  if (error) throw error;
-  const { data: urlData } = supa.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
-  return { url: urlData.publicUrl, path: fileName };
+  // Try Supabase Storage first; fall back to base64 data URL if bucket is missing
+  if (currentUser && supa) {
+    try {
+      const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
+      const fileName = `${currentUser.id}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data, error } = await supa.storage
+        .from(STORAGE_BUCKET)
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+      if (!error) {
+        const { data: urlData } = supa.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+        return { url: urlData.publicUrl, path: fileName };
+      }
+    } catch(e) {
+      // Storage not configured – fall through to base64
+    }
+  }
+  // Base64 fallback: store image directly in app state
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = e => res(e.target.result);
+    r.onerror = () => rej(new Error('Datei konnte nicht gelesen werden'));
+    r.readAsDataURL(file);
+  });
+  return { url: dataUrl, path: null };
 }
 
 async function deletePhotoFromStorage(path) {
@@ -5255,51 +5792,274 @@ async function deletePhotoFromStorage(path) {
 }
 
 // ── FOTO-GALERIE ─────────────────────────────────
-let pendingPhoto    = null;
+const FOTO_KAT = ['Rohbau','Fundament','Keller','Dach','Fassade','Fenster & Türen','Innenausbau','Elektro','Sanitär','Heizung','Estrich & Böden','Maler & Tapete','Außenanlagen','Garage','Sonstiges'];
+
+function refreshFotoKat(selectId, currentVal) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  const cur = currentVal !== undefined ? currentVal : el.value;
+  const existing = [...new Set([...(state.fotos||[]).map(f=>f.kat), ...(state.fotoAlben||[]).map(a=>a.kat)].filter(Boolean))];
+  const all = [...new Set([...FOTO_KAT, ...existing])];
+  el.innerHTML = all.map(k => `<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
+}
+
+let pendingPhoto     = null;
 let pendingPhotoFile = null;
+let fotoBatchFiles   = [];
+let _fotoView        = 'alben';
+let _openAlbumId     = null;
+
+function setFotoView(view, btn) {
+  _fotoView = view;
+  document.querySelectorAll('#foto-tab-alben,#foto-tab-alle').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderFotos();
+}
 
 function addPhotos(input) {
   const files = Array.from(input.files);
-  if (files.length === 0) return;
-  let idx = 0;
-  function processNext() {
-    if (idx >= files.length) { renderFotos(); return; }
-    const file = files[idx++];
-    const reader = new FileReader();
-    reader.onload = e => {
-      pendingPhoto     = { preview: e.target.result, file: file.name };
-      pendingPhotoFile = file;
-      document.getElementById('fi-title').value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g,' ');
-      document.getElementById('fi-datum').value = today();
-      openModal('modal-foto-info');
-      document.getElementById('modal-foto-info')._next = processNext;
-    };
-    reader.readAsDataURL(file);
-  }
-  processNext();
   input.value = '';
+  if (files.length === 0) return;
+  if (files.length === 1) {
+    openSinglePhotoModal(files[0]);
+  } else {
+    openBatchPhotoModal(files);
+  }
+}
+
+function openSinglePhotoModal(file, targetAlbumId) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingPhoto     = { preview: e.target.result, file: file.name, albumId: targetAlbumId || null };
+    pendingPhotoFile = file;
+    document.getElementById('fi-title').value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g,' ');
+    document.getElementById('fi-datum').value = today();
+    refreshFotoKat('fi-kat');
+    document.getElementById('modal-foto-info')._next = null;
+    openModal('modal-foto-info');
+  };
+  reader.readAsDataURL(file);
+}
+
+function openBatchPhotoModal(files, targetAlbumId) {
+  fotoBatchFiles = files;
+  fotoBatchFiles._targetAlbumId = targetAlbumId || null;
+  refreshFotoKat('fb-kat');
+  document.getElementById('fb-datum').value = today();
+  document.getElementById('fb-beschr').value = '';
+  document.getElementById('foto-batch-progress').style.display = 'none';
+  const btn = document.getElementById('foto-batch-btn');
+  btn.disabled = false;
+  btn.textContent = `📸 ${files.length} Foto${files.length !== 1 ? 's' : ''} hochladen`;
+  const thumbs = document.getElementById('foto-batch-thumbs');
+  thumbs.innerHTML = '';
+  files.forEach(file => {
+    const r = new FileReader();
+    r.onload = e => {
+      const div = document.createElement('div');
+      div.style.cssText = 'position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--border)';
+      div.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:white;font-size:0.58rem;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${file.name}</div>`;
+      thumbs.appendChild(div);
+    };
+    r.readAsDataURL(file);
+  });
+  const descLabel = document.querySelector('#modal-foto-batch label[for="fb-beschr"]') || document.querySelector('#modal-foto-batch .form-row:has(#fb-beschr)');
+  if (targetAlbumId) {
+    document.querySelector('#modal-foto-batch h3').textContent = '📸 Fotos zum Album hinzufügen';
+  } else {
+    document.querySelector('#modal-foto-batch h3').textContent = '📸 Fotos hochladen';
+  }
+  openModal('modal-foto-batch');
+}
+
+async function confirmBatchPhotos() {
+  const kat    = document.getElementById('fb-kat').value;
+  const datum  = document.getElementById('fb-datum').value || today();
+  const beschr = document.getElementById('fb-beschr').value.trim();
+  const btn    = document.getElementById('foto-batch-btn');
+  const progressEl   = document.getElementById('foto-batch-progress');
+  const progressText = document.getElementById('foto-batch-progress-text');
+  const bar          = document.getElementById('foto-batch-bar');
+  btn.disabled = true;
+  progressEl.style.display = '';
+
+  state.fotoAlben = state.fotoAlben || [];
+  let targetAlbumId = fotoBatchFiles._targetAlbumId;
+  if (!targetAlbumId) {
+    targetAlbumId = Date.now();
+    state.fotoAlben.push({ id: targetAlbumId, title: beschr || `${kat} – ${fmtDate(datum)}`, datum, kat });
+  }
+
+  const total = fotoBatchFiles.length;
+  let done = 0;
+  for (const file of fotoBatchFiles) {
+    progressText.textContent = `${done + 1} von ${total} wird gespeichert…`;
+    bar.style.width = `${Math.round((done / total) * 100)}%`;
+    try {
+      const { url, path } = await uploadPhotoToStorage(file, 'galerie');
+      state.fotos.push({
+        id: Date.now() + done,
+        albumId: targetAlbumId,
+        url, path,
+        title: file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g,' '),
+        kat, datum
+      });
+    } catch(e) {
+      showToast(`⚠️ ${file.name}: ${e.message}`, 'error');
+    }
+    done++;
+  }
+  bar.style.width = '100%';
+  progressText.textContent = `${done} Foto${done !== 1 ? 's' : ''} gespeichert!`;
+
+  const addingToAlbum = !!fotoBatchFiles._targetAlbumId;
+  const returnAlbumId = targetAlbumId;
+
+  // Close modal + show toast first so they always appear
+  closeModal('modal-foto-batch');
+  fotoBatchFiles = [];
+  showToast(`✅ ${done} Foto${done !== 1 ? 's' : ''} gespeichert`, 'success');
+
+  try { save(); } catch(e) {
+    showToast('⚠️ Lokaler Speicher voll – Fotos wurden nicht dauerhaft gespeichert', 'error');
+  }
+  renderFotos();
+  if (addingToAlbum) setTimeout(() => openAlbumView(returnAlbumId), 200);
+}
+
+// ── ALBUM VIEW ───────────────────────────────────
+function openAlbumView(albumId) {
+  state.fotoAlben = state.fotoAlben || [];
+  const album  = state.fotoAlben.find(a => a.id === albumId);
+  const fotos  = (state.fotos || []).filter(f => f.albumId === albumId);
+  if (!album && fotos.length === 0) return;
+  _openAlbumId = albumId;
+  document.getElementById('av-title').textContent = album?.title || 'Album';
+  document.getElementById('av-meta').textContent  = `${album?.kat || ''} · ${fmtDate(album?.datum || '')} · ${fotos.length} Foto${fotos.length !== 1 ? 's' : ''}`;
+  renderAlbumGrid(fotos);
+  openModal('modal-album-view');
+}
+
+function renderAlbumGrid(fotos) {
+  const grid = document.getElementById('av-grid');
+  if (!grid) return;
+  if (fotos.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><p>Keine Fotos in diesem Album.</p></div>`;
+    return;
+  }
+  grid.innerHTML = fotos.map(f => `
+    <div style="position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openLightbox(${f.id})">
+      <img src="${f.url||f.data||''}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
+      <button class="photo-card-del" onclick="event.stopPropagation();deletePhotoFromAlbum(${f.id})" title="Löschen" style="opacity:0;position:absolute;top:5px;right:5px">🗑</button>
+      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.45);color:white;font-size:0.65rem;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.title||''}</div>
+    </div>`).join('');
+  // hover effect
+  grid.querySelectorAll('div[style*="aspect-ratio"]').forEach(card => {
+    card.addEventListener('mouseenter', () => { const d = card.querySelector('.photo-card-del'); if(d) d.style.opacity='1'; });
+    card.addEventListener('mouseleave', () => { const d = card.querySelector('.photo-card-del'); if(d) d.style.opacity='0'; });
+  });
+}
+
+function addFotosToAlbum(input) {
+  const files = Array.from(input.files);
+  input.value = '';
+  if (!files.length || !_openAlbumId) return;
+  closeModal('modal-album-view');
+  if (files.length === 1) {
+    openSinglePhotoModal(files[0], _openAlbumId);
+  } else {
+    openBatchPhotoModal(files, _openAlbumId);
+  }
+}
+
+function deletePhotoFromAlbum(id) {
+  if (!confirm('Foto löschen?')) return;
+  const f = state.fotos.find(f => f.id === id);
+  if (f?.path) deletePhotoFromStorage(f.path);
+  state.fotos = state.fotos.filter(f => f.id !== id);
+  save();
+  // Refresh album view
+  const remaining = (state.fotos || []).filter(f => f.albumId === _openAlbumId);
+  if (remaining.length === 0) {
+    closeModal('modal-album-view');
+    deleteAlbumData(_openAlbumId);
+    renderFotos();
+  } else {
+    renderAlbumGrid(remaining);
+    const meta = document.getElementById('av-meta');
+    const album = (state.fotoAlben||[]).find(a=>a.id===_openAlbumId);
+    if (meta && album) meta.textContent = `${album.kat} · ${fmtDate(album.datum)} · ${remaining.length} Foto${remaining.length!==1?'s':''}`;
+  }
+  renderFotos();
+  showToast('🗑 Foto gelöscht', 'success');
+}
+
+function deleteAlbumData(albumId) {
+  state.fotoAlben = (state.fotoAlben||[]).filter(a => a.id !== albumId);
+  state.fotos = (state.fotos||[]).filter(f => f.albumId !== albumId);
+  save();
+}
+
+function deleteAlbum(albumId) {
+  const fotos = (state.fotos||[]).filter(f => f.albumId === albumId);
+  if (!confirm(`Album und alle ${fotos.length} Foto${fotos.length!==1?'s':''} löschen?`)) return;
+  fotos.forEach(f => { if(f.path) deletePhotoFromStorage(f.path); });
+  deleteAlbumData(albumId);
+  closeModal('modal-album-view');
+  renderFotos();
+  showToast('🗑 Album gelöscht', 'success');
+}
+
+function editAlbum(albumId) {
+  const album = (state.fotoAlben||[]).find(a => a.id === albumId);
+  if (!album) return;
+  const newTitle = prompt('Album-Beschreibung:', album.title);
+  if (newTitle === null) return;
+  album.title = newTitle || album.title;
+  save();
+  document.getElementById('av-title').textContent = album.title;
+  renderFotos();
 }
 
 async function confirmPhoto() {
+  const editId = document.getElementById('modal-foto-info')._editId;
+  if (editId) {
+    // Edit-Modus: nur Metadaten ändern, kein Upload
+    const f = state.fotos.find(f => f.id === editId);
+    if (f) {
+      f.title = document.getElementById('fi-title').value || 'Foto';
+      f.kat   = document.getElementById('fi-kat').value;
+      f.datum = document.getElementById('fi-datum').value || today();
+    }
+    document.getElementById('modal-foto-info')._editId = null;
+    pendingPhoto = null;
+    save(); closeModal('modal-foto-info'); renderFotos();
+    showToast('✅ Foto aktualisiert', 'success');
+    return;
+  }
   if (!pendingPhoto || !pendingPhotoFile) return;
   const btn = document.querySelector('#modal-foto-info .btn-primary');
   if (btn) { btn.textContent = 'Wird hochgeladen…'; btn.disabled = true; }
   try {
     const { url, path } = await uploadPhotoToStorage(pendingPhotoFile, 'galerie');
-    state.fotos.push({
-      id:    Date.now(),
-      url,
-      path,
-      title: document.getElementById('fi-title').value || 'Foto',
-      kat:   document.getElementById('fi-kat').value,
-      datum: document.getElementById('fi-datum').value || today()
-    });
+    const newId   = Date.now();
+    const title   = document.getElementById('fi-title').value || 'Foto';
+    const kat     = document.getElementById('fi-kat').value;
+    const datum   = document.getElementById('fi-datum').value || today();
+    const albumId = pendingPhoto.albumId || newId;
+    if (!pendingPhoto.albumId) {
+      state.fotoAlben = state.fotoAlben || [];
+      state.fotoAlben.push({ id: albumId, title, datum, kat });
+    }
+    state.fotos.push({ id: newId, albumId, url, path, title, kat, datum });
     save();
     closeModal('modal-foto-info');
     pendingPhoto     = null;
     pendingPhotoFile = null;
     const nextFn = document.getElementById('modal-foto-info')._next;
     if (nextFn) nextFn();
+    if (pendingPhoto?.albumId) openAlbumView(albumId);
     renderFotos();
   } catch(e) {
     showToast('⚠️ Upload fehlgeschlagen: ' + e.message, 'error');
@@ -5325,10 +6085,11 @@ function openLightbox(id) {
 }
 
 function renderFotos() {
+  refreshFotoKat('foto-filter');
   const search    = (document.getElementById('foto-search')?.value || '').toLowerCase();
   const filterKat = document.getElementById('foto-filter')?.value || '';
   const items     = state.fotos.filter(f =>
-    f.title.toLowerCase().includes(search) && (!filterKat || f.kat === filterKat)
+    (f.title||'').toLowerCase().includes(search) && (!filterKat || f.kat === filterKat)
   );
   const el = document.getElementById('photo-grid');
   if (!el) return;
@@ -5338,10 +6099,11 @@ function renderFotos() {
   }
   el.innerHTML = [...items].reverse().map(f => `
     <div class="photo-card" onclick="openLightbox(${f.id})">
-      <button class="photo-card-del" onclick="event.stopPropagation();deletePhoto(${f.id})">🗑</button>
-      <img src="${f.url || f.data || ''}" alt="${f.title}" loading="lazy">
+      <button class="photo-card-del" onclick="event.stopPropagation();deletePhoto(${f.id})" title="Löschen">🗑</button>
+      <button class="photo-card-del" onclick="event.stopPropagation();editFoto(${f.id})" title="Bearbeiten" style="right:36px;background:var(--accent)">✏️</button>
+      <img src="${f.url || f.data || ''}" alt="${f.title||''}" loading="lazy">
       <div class="photo-card-info">
-        <div class="photo-card-title">${f.title}</div>
+        <div class="photo-card-title">${f.title||'Foto'}</div>
         <div class="photo-card-meta">${f.kat} · ${fmtDate(f.datum)}</div>
       </div>
     </div>`).join('');
@@ -5538,26 +6300,95 @@ function openMgLightbox(url, title) {
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 
 function renderFotos() {
-  const search = (document.getElementById('foto-search')?.value || '').toLowerCase();
+  refreshFotoKat('foto-filter');
+  const search    = (document.getElementById('foto-search')?.value || '').toLowerCase();
   const filterKat = document.getElementById('foto-filter')?.value || '';
-  const items = state.fotos.filter(f =>
-    f.title.toLowerCase().includes(search) &&
-    (!filterKat || f.kat === filterKat)
-  );
   const el = document.getElementById('photo-grid');
-  if (items.length === 0) {
-    el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📸</div><p>Noch keine Fotos – lade dein erstes Bild hoch!</p></div>`;
+  if (!el) return;
+
+  if (_fotoView === 'alben') {
+    state.fotoAlben = state.fotoAlben || [];
+    // Albums from fotoAlben
+    let albums = [...state.fotoAlben].reverse().filter(a =>
+      (!filterKat || a.kat === filterKat) &&
+      (!search || (a.title||'').toLowerCase().includes(search) || (a.kat||'').toLowerCase().includes(search))
+    );
+    // Legacy photos without albumId shown as individual virtual albums
+    const legacyFotos = (state.fotos||[]).filter(f => !f.albumId &&
+      (!filterKat || f.kat === filterKat) &&
+      (!search || (f.title||'').toLowerCase().includes(search))
+    );
+
+    if (albums.length === 0 && legacyFotos.length === 0) {
+      el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📸</div><p>Noch keine Fotos – lade dein erstes Bild hoch!</p></div>`;
+      return;
+    }
+
+    el.innerHTML = albums.map(album => {
+      const fotos = (state.fotos||[]).filter(f => f.albumId === album.id);
+      const count = fotos.length;
+      const covers = fotos.slice(0, 4);
+      const coverHtml = covers.length === 0
+        ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem">📷</div>`
+        : covers.length === 1
+          ? `<img src="${covers[0].url||covers[0].data||''}" style="width:100%;height:100%;object-fit:cover">`
+          : `<div class="album-collage">${covers.map(f=>`<img src="${f.url||f.data||''}">`).join('')}</div>`;
+      return `<div class="photo-card album-card" onclick="openAlbumView(${album.id})">
+        <div class="album-cover">
+          ${coverHtml}
+          <div class="album-count">${count} Foto${count!==1?'s':''}</div>
+        </div>
+        <div class="photo-card-info">
+          <div class="photo-card-title">${album.title}</div>
+          <div class="photo-card-meta">${album.kat} · ${fmtDate(album.datum)}</div>
+        </div>
+      </div>`;
+    }).join('') + legacyFotos.map(f => `
+      <div class="photo-card" onclick="openLightbox(${f.id})">
+        <button class="photo-card-del" onclick="event.stopPropagation();deletePhoto(${f.id})" title="Löschen">🗑</button>
+        <img src="${f.url||f.data||''}" alt="${f.title||''}" loading="lazy">
+        <div class="photo-card-info">
+          <div class="photo-card-title">${f.title||'Foto'}</div>
+          <div class="photo-card-meta">${f.kat} · ${fmtDate(f.datum)}</div>
+        </div>
+      </div>`).join('');
     return;
   }
-  el.innerHTML = [...items].reverse().map(f => `
+
+  // Alle-Ansicht: flat grid of all photos
+  const allFotos = (state.fotos||[]).filter(f =>
+    (!filterKat || f.kat === filterKat) &&
+    (!search || (f.title||'').toLowerCase().includes(search))
+  );
+  if (allFotos.length === 0) {
+    el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📸</div><p>Noch keine Fotos vorhanden.</p></div>`;
+    return;
+  }
+  el.innerHTML = [...allFotos].reverse().map(f => `
     <div class="photo-card" onclick="openLightbox(${f.id})">
-      <button class="photo-card-del" onclick="event.stopPropagation();deletePhoto(${f.id})">🗑</button>
-      <img src="${f.url || f.data || ''}" alt="${f.title}" loading="lazy">
+      <button class="photo-card-del" onclick="event.stopPropagation();deletePhoto(${f.id})" title="Löschen">🗑</button>
+      <button class="photo-card-del" onclick="event.stopPropagation();editFoto(${f.id})" title="Bearbeiten" style="right:36px;background:var(--accent)">✏️</button>
+      <img src="${f.url||f.data||''}" alt="${f.title||''}" loading="lazy">
       <div class="photo-card-info">
-        <div class="photo-card-title">${f.title}</div>
+        <div class="photo-card-title">${f.title||'Foto'}</div>
         <div class="photo-card-meta">${f.kat} · ${fmtDate(f.datum)}</div>
       </div>
     </div>`).join('');
+}
+
+function editFoto(id) {
+  const f = state.fotos.find(f => f.id === id);
+  if (!f) return;
+  document.getElementById('fi-title').value = f.title || '';
+  document.getElementById('fi-datum').value = f.datum || today();
+  refreshFotoKat('fi-kat', f.kat);
+  pendingPhoto = { preview: f.url || f.data || '', file: f.title };
+  pendingPhotoFile = null;
+  const btn = document.querySelector('#modal-foto-info .btn-primary');
+  if (btn) btn.textContent = 'Speichern';
+  document.getElementById('modal-foto-info')._editId = id;
+  document.getElementById('modal-foto-info')._next = null;
+  openModal('modal-foto-info');
 }
 
 // ──────────────── KOSTENENTWICKLUNG CHART ────────────────
@@ -5713,8 +6544,8 @@ function filterDoku(typ, btn) {
 
 function addDoku() {
   state.dokumentation = state.dokumentation || [];
-  state.dokumentation.push({
-    id: Date.now(),
+  const editId = document.getElementById('modal-doku')._editId;
+  const data = {
     title:   document.getElementById('dk-title').value || 'Eintrag',
     typ:     document.getElementById('dk-typ').value,
     raum:    document.getElementById('dk-raum').value,
@@ -5722,8 +6553,15 @@ function addDoku() {
     hinweis: document.getElementById('dk-hinweis').value,
     datum:   document.getElementById('dk-datum').value || today(),
     tags:    document.getElementById('dk-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-    fotos:   [...dokuPendingPhotos]
-  });
+  };
+  if (editId) {
+    const idx = state.dokumentation.findIndex(d => d.id === editId);
+    if (idx > -1) state.dokumentation[idx] = { ...state.dokumentation[idx], ...data };
+    document.getElementById('modal-doku')._editId = null;
+    document.querySelector('#modal-doku h3').textContent = '📐 Dokumentation erfassen';
+  } else {
+    state.dokumentation.push({ id: Date.now(), ...data, fotos: [...dokuPendingPhotos] });
+  }
   save();
   closeModal('modal-doku');
   ['dk-title','dk-raum','dk-text','dk-hinweis','dk-datum','dk-tags'].forEach(id => document.getElementById(id).value = '');
@@ -5733,10 +6571,26 @@ function addDoku() {
   renderDoku();
 }
 
+function editDoku(id) {
+  const d = (state.dokumentation||[]).find(d => d.id === id);
+  if (!d) return;
+  document.getElementById('dk-title').value   = d.title   || '';
+  document.getElementById('dk-raum').value    = d.raum    || '';
+  document.getElementById('dk-text').value    = d.text    || '';
+  document.getElementById('dk-hinweis').value = d.hinweis || '';
+  document.getElementById('dk-datum').value   = d.datum   || '';
+  document.getElementById('dk-tags').value    = (d.tags||[]).join(', ');
+  Array.from(document.getElementById('dk-typ').options).forEach(o => { if (o.value === d.typ) o.selected = true; });
+  document.getElementById('modal-doku')._editId = id;
+  document.querySelector('#modal-doku h3').textContent = '📐 Dokumentation bearbeiten';
+  openModal('modal-doku');
+}
+
 function deleteDoku(id) {
   if (!confirm('Eintrag löschen?')) return;
   state.dokumentation = state.dokumentation.filter(d => d.id !== id);
   save(); renderDoku();
+  showToast('🗑 Dokumentation gelöscht', 'success');
 }
 
 const DOKU_COLORS = { Elektro: '#f59e0b', Wasser: '#0ea5e9', Heizung: '#ef4444', Statik: '#8b5cf6', Sonstiges: '#64748b' };
@@ -5785,7 +6639,8 @@ function renderDoku() {
 
     return `
     <div class="doku-card typ-${typCss}">
-      <div class="doku-card-del">
+      <div class="doku-card-del" style="display:flex;gap:4px">
+        <button class="action-btn" onclick="editDoku(${d.id})" title="Bearbeiten">✏️</button>
         <button class="action-btn del" onclick="deleteDoku(${d.id})">🗑</button>
       </div>
       <div class="doku-card-type" style="color:${color}">${icon} ${d.typ}</div>
@@ -5831,6 +6686,7 @@ function addWartung() {
     state.wartungen.push(item);
   }
   save(); closeModal('modal-wartung');
+  showToast(editId ? '✏️ Wartung aktualisiert' : '✅ Wartungsaufgabe gespeichert', 'success');
   ['wt-name','wt-desc','wt-last','wt-who','wt-kosten','wt-intervall'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('wt-edit-id')) document.getElementById('wt-edit-id').value = '';
   renderWartung();
@@ -5857,6 +6713,7 @@ function deleteWartung(id) {
   if (!confirm('Wartung löschen?')) return;
   state.wartungen = state.wartungen.filter(w => w.id !== id);
   save(); renderWartung();
+  showToast('🗑 Wartung gelöscht', 'success');
 }
 
 function markWartungDone(id) {
@@ -5949,12 +6806,13 @@ function renderWartung() {
 }
 
 // ──────────────── TOAST ────────────────
-function showToast(msg, type='success') {
+function showToast(msg, type='success', duration=3200) {
+  const bg = type==='success' ? 'var(--success)' : type==='warning' ? '#d97706' : 'var(--danger)';
   const t = document.createElement('div');
-  t.style.cssText = `position:fixed;bottom:28px;right:28px;z-index:999;background:${type==='success'?'var(--success)':'var(--danger)'};color:white;padding:12px 20px;border-radius:12px;font-weight:700;font-size:0.875rem;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideUp 0.3s ease;pointer-events:none`;
+  t.style.cssText = `position:fixed;bottom:28px;right:28px;z-index:999;background:${bg};color:white;padding:12px 20px;border-radius:12px;font-weight:700;font-size:0.875rem;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideUp 0.3s ease;pointer-events:none`;
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(() => t.remove(), duration);
 }
 
 // ──────────────── KI-BAUBERATER ────────────────
@@ -6480,6 +7338,7 @@ async function onAuthSuccess(user, isNewUser = false) {
   } else {
     applyModuleVisibility();
     renderDashboard();
+    setTimeout(requestNotifications, 1500);
   }
 }
 
@@ -6848,6 +7707,7 @@ function addAbhBlock() {
   });
   save();
   closeModal('modal-abh-block');
+  showToast('✅ Abhängigkeit gespeichert', 'success');
   ['abh-name','abh-deps','abh-parallel','abh-notiz'].forEach(id => document.getElementById(id).value = '');
   renderAbhaengigkeiten();
 }
@@ -6855,6 +7715,7 @@ function addAbhBlock() {
 function deleteAbhBlock(id) {
   state.abhaengigkeiten = (state.abhaengigkeiten||[]).filter(b => b.id !== id);
   save(); renderAbhaengigkeiten();
+  showToast('🗑 Abhängigkeit gelöscht', 'success');
 }
 
 function toggleAbhStatus(id) {
@@ -6863,6 +7724,7 @@ function toggleAbhStatus(id) {
   const cycle = ['Offen','In Arbeit','Erledigt'];
   b.status = cycle[(cycle.indexOf(b.status)+1) % cycle.length];
   save(); renderAbhaengigkeiten();
+  showToast('✅ Status aktualisiert', 'success');
 }
 
 function renderAbhaengigkeiten() {
@@ -7018,13 +7880,21 @@ function deleteAngebot(id) {
   if (!confirm('Angebot löschen?')) return;
   state.angebote = (state.angebote||[]).filter(a => a.id !== id);
   save(); renderAngebote();
+  showToast('🗑 Angebot gelöscht', 'success');
 }
+
+let _pendingAngebotId = null;
 
 function angebotZuRechnung() {
   const id = parseInt(document.getElementById('ang-edit-id').value);
   const a  = (state.angebote||[]).find(a => a.id === id);
   if (!a) return;
+  if (a.konvertiert) {
+    showToast('⚠️ Dieses Angebot wurde bereits in eine Rechnung umgewandelt', 'error');
+    return;
+  }
   closeModal('modal-angebot');
+  _pendingAngebotId = id;
   // Pre-fill Kosten modal
   refreshAllKatSelects(a.kat);
   document.getElementById('k-beschr').value  = a.beschr;
@@ -7033,6 +7903,166 @@ function angebotZuRechnung() {
   document.getElementById('k-datum').value   = today();
   openModal('modal-kosten');
   showToast('💡 Angebot in Rechnung umgewandelt – bitte prüfen & speichern', 'success');
+}
+
+let _angView = 'liste';
+
+function setAngView(view, btn) {
+  _angView = view;
+  document.querySelectorAll('#ang-tab-liste,#ang-tab-vergleich').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ang-liste-view').style.display    = view === 'liste'     ? '' : 'none';
+  document.getElementById('ang-vergleich-view').style.display = view === 'vergleich' ? '' : 'none';
+  if (view === 'vergleich') renderAngVergleich();
+}
+
+function renderAngVergleich() {
+  const el = document.getElementById('ang-vergleich-view');
+  if (!el) return;
+  const angebote = state.angebote || [];
+  if (angebote.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="icon">⚖️</div><p>Keine Angebote vorhanden.<br>Erfasse zuerst Angebote und weise ihnen eine Kategorie zu.</p></div>`;
+    return;
+  }
+  const groups = {};
+  angebote.forEach(a => { const k = a.kat || 'Sonstige'; if (!groups[k]) groups[k] = []; groups[k].push(a); });
+  const statusColor = { Ausstehend: 'badge-yellow', Angenommen: 'badge-green', Abgelehnt: 'badge-red', 'In Verhandlung': 'badge-blue', Umgewandelt: 'badge-gray' };
+  el.innerHTML = Object.entries(groups).map(([kat, offers]) => {
+    const betraegePos = offers.map(o => parseFloat(o.betrag)||0).filter(b => b > 0);
+    const minBetrag = betraegePos.length ? Math.min(...betraegePos) : -1;
+    const sorted = [...offers].sort((a,b) => (parseFloat(a.betrag)||0) - (parseFloat(b.betrag)||0));
+    return `<div style="margin-bottom:28px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span class="badge badge-gray" style="font-size:0.78rem;padding:4px 10px">${kat}</span>
+        <span style="font-size:0.78rem;color:var(--text3)">${offers.length} Angebot${offers.length!==1?'e':''}</span>
+        ${offers.length > 1 ? `<span style="font-size:0.75rem;color:var(--success);font-weight:600">· Günstigstes: ${fmt(minBetrag)}</span>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+        ${sorted.map((a,i) => {
+          const isCheapest = offers.length > 1 && (parseFloat(a.betrag)||0) === minBetrag && minBetrag > 0;
+          const now = new Date(); now.setHours(0,0,0,0);
+          const gueltigD = a.gueltig ? new Date(a.gueltig) : null;
+          const isExpired = gueltigD && gueltigD < now && a.status === 'Ausstehend';
+          return `<div style="background:var(--surface);border:2px solid ${isCheapest?'var(--success)':'var(--border)'};border-radius:14px;padding:16px;position:relative;display:flex;flex-direction:column;gap:6px">
+            ${isCheapest ? `<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--success);color:white;font-size:0.64rem;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">✓ Günstigstes Angebot</div>` : ''}
+            <div style="font-weight:700;font-size:0.92rem;color:var(--text)">${a.anbieter||'–'}</div>
+            <div style="font-size:0.75rem;color:var(--text3)">${a.beschr}</div>
+            <div style="font-size:1.4rem;font-weight:800;color:${isCheapest?'var(--success)':'var(--text)'};font-family:'JetBrains Mono',monospace;margin:4px 0">${fmt(a.betrag)}</div>
+            <div style="font-size:0.73rem;color:var(--text3);display:flex;flex-direction:column;gap:2px">
+              ${a.datum ? `<span>📅 ${fmtDate(a.datum)}</span>` : ''}
+              ${a.gueltig ? `<span style="color:${isExpired?'var(--danger)':'inherit'}">⏱ Gültig bis ${fmtDate(a.gueltig)}${isExpired?' (abgelaufen)':''}</span>` : ''}
+              ${a.notiz ? `<span style="color:var(--text2);margin-top:4px">${a.notiz}</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid var(--border)">
+              <span class="badge ${statusColor[a.status]||'badge-gray'}">${a.status}</span>
+              <div style="display:flex;gap:4px">
+                <button class="action-btn" onclick="editAngebot(${a.id})" title="Bearbeiten">✏️</button>
+                <button class="action-btn del" onclick="deleteAngebot(${a.id})" title="Löschen">🗑</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Angebot KI ──
+function previewAngKiFile() {
+  const file = document.getElementById('ang-ki-file').files[0];
+  if (!file || !file.type.startsWith('image/')) { document.getElementById('ang-ki-preview').style.display='none'; return; }
+  const r = new FileReader();
+  r.onload = e => { document.getElementById('ang-ki-preview-img').src = e.target.result; document.getElementById('ang-ki-preview').style.display=''; };
+  r.readAsDataURL(file);
+}
+
+async function compressImage(file, maxPx = 1280, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width > height) { height = Math.round(height * maxPx / width); width = maxPx; }
+        else { width = Math.round(width * maxPx / height); height = maxPx; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Komprimierung fehlgeschlagen')); return; }
+        const reader = new FileReader();
+        reader.onload = e => resolve({ dataUrl: e.target.result, mediaType: 'image/jpeg' });
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Bild konnte nicht geladen werden')); };
+    img.src = url;
+  });
+}
+
+async function scanAngKI() {
+  const text = document.getElementById('ang-ki-text').value.trim();
+  const file = document.getElementById('ang-ki-file').files[0];
+  if (!text && !file) { showToast('Bitte Text einfügen oder Foto hochladen', 'error'); return; }
+  document.getElementById('ang-ki-loading').style.display = '';
+  document.getElementById('ang-ki-result').style.display  = 'none';
+  document.getElementById('ang-ki-save-btn').style.display = 'none';
+  document.getElementById('ang-ki-scan-btn').disabled = true;
+  try {
+    const today_str = new Date().toISOString().split('T')[0];
+    const prompt = `Lies dieses Angebot aus und extrahiere folgende Daten als reines JSON-Objekt (kein Text davor/danach):\n{"beschr":"Beschreibung/Gewerk","anbieter":"Firmenname","betrag":12345.00,"datum":"YYYY-MM-DD oder null","gueltig":"YYYY-MM-DD oder null","notiz":"Wichtige Details, Leistungsumfang in 1-2 Sätzen"}\nHeute ist ${today_str}. Betrag als Zahl ohne Währungssymbol. Falls Wert fehlt: null.`;
+    let messages;
+    if (file && file.type.startsWith('image/')) {
+      const { dataUrl, mediaType } = await compressImage(file);
+      messages = [{ role:'user', content:[{ type:'image', source:{ type:'base64', media_type: mediaType, data: dataUrl.split(',')[1] }},{ type:'text', text:prompt }]}];
+    } else {
+      messages = [{ role:'user', content:`${prompt}\n\nAngebotstext:\n${text}` }];
+    }
+    const resp = await fetch('/api/ki', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:512, messages }) });
+    const respText = await resp.text();
+    let data;
+    try { data = JSON.parse(respText); } catch { throw new Error('Server-Fehler: ' + respText.slice(0,80)); }
+    if (!resp.ok) throw new Error(data.error?.message || data.error || `HTTP ${resp.status}`);
+    const raw = data.content?.[0]?.text || '';
+    const m   = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('Keine auswertbare Antwort');
+    const ex = JSON.parse(m[0]);
+    document.getElementById('ang-ki-beschr').value   = ex.beschr   || '';
+    document.getElementById('ang-ki-anbieter').value = ex.anbieter || '';
+    document.getElementById('ang-ki-betrag').value   = ex.betrag   || '';
+    document.getElementById('ang-ki-datum').value    = ex.datum    || '';
+    document.getElementById('ang-ki-gueltig').value  = ex.gueltig  || '';
+    document.getElementById('ang-ki-notiz').value    = ex.notiz    || '';
+    document.getElementById('ang-ki-result').style.display   = '';
+    document.getElementById('ang-ki-save-btn').style.display = '';
+    showToast('✅ Angebot erkannt – bitte prüfen', 'success');
+  } catch(e) {
+    showToast('❌ KI-Erkennung fehlgeschlagen: ' + e.message, 'error');
+  } finally {
+    document.getElementById('ang-ki-loading').style.display = 'none';
+    document.getElementById('ang-ki-scan-btn').disabled = false;
+  }
+}
+
+function confirmAngKI() {
+  document.getElementById('ang-beschr').value   = document.getElementById('ang-ki-beschr').value;
+  document.getElementById('ang-anbieter').value = document.getElementById('ang-ki-anbieter').value;
+  document.getElementById('ang-betrag').value   = document.getElementById('ang-ki-betrag').value;
+  document.getElementById('ang-datum').value    = document.getElementById('ang-ki-datum').value;
+  document.getElementById('ang-gueltig').value  = document.getElementById('ang-ki-gueltig').value;
+  document.getElementById('ang-notiz').value    = document.getElementById('ang-ki-notiz').value;
+  closeModal('modal-angebot-ki'); resetAngKI();
+  openModal('modal-angebot');
+  showToast('✅ Daten übernommen – bitte Kategorie und Status noch setzen', 'success');
+}
+
+function resetAngKI() {
+  ['ang-ki-text','ang-ki-beschr','ang-ki-anbieter','ang-ki-betrag','ang-ki-datum','ang-ki-gueltig','ang-ki-notiz'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('ang-ki-file').value = '';
+  ['ang-ki-preview','ang-ki-result','ang-ki-loading'].forEach(id => document.getElementById(id).style.display='none');
+  document.getElementById('ang-ki-save-btn').style.display = 'none';
 }
 
 function renderAngebote() {
@@ -7055,7 +8085,7 @@ function renderAngebote() {
     return;
   }
 
-  const statusBadge = { Ausstehend: 'badge-yellow', Angenommen: 'badge-green', Abgelehnt: 'badge-red', 'In Verhandlung': 'badge-blue' };
+  const statusBadge = { Ausstehend: 'badge-yellow', Angenommen: 'badge-green', Abgelehnt: 'badge-red', 'In Verhandlung': 'badge-blue', Umgewandelt: 'badge-gray' };
   tbody.innerHTML = [...state.angebote].reverse().map(a => {
     const now      = new Date(); now.setHours(0,0,0,0);
     const gueltigD = a.gueltig ? new Date(a.gueltig) : null;
@@ -7069,11 +8099,12 @@ function renderAngebote() {
       <td style="font-family:'JetBrains Mono',monospace;font-size:0.73rem;color:${isExpired?'var(--danger)':'var(--text3)'}">${a.gueltig?fmtDate(a.gueltig):'–'}</td>
       <td style="display:flex;gap:4px">
         <button class="action-btn" onclick="editAngebot(${a.id})" title="Bearbeiten">✏️</button>
-        ${a.status==='Angenommen'?`<button class="action-btn" onclick="document.getElementById('ang-edit-id').value=${a.id};angebotZuRechnung()" title="Zu Rechnung">→💶</button>`:''}
+        <button class="action-btn" onclick="document.getElementById('ang-edit-id').value=${a.id};angebotZuRechnung()" title="Zu Rechnung umwandeln">→💶</button>
         <button class="action-btn del" onclick="deleteAngebot(${a.id})">🗑</button>
       </td>
     </tr>`;
   }).join('');
+  if (_angView === 'vergleich') renderAngVergleich();
 }
 
 // ══════════════════════════════════════
@@ -7132,11 +8163,21 @@ function deleteZahlung(id) {
   if (!confirm('Zahlung löschen?')) return;
   state.zahlungen = (state.zahlungen||[]).filter(z => z.id !== id);
   save(); renderZahlungsplan();
+  showToast('🗑 Zahlung gelöscht', 'success');
 }
 
 function markZahlungBezahlt(id) {
   const z = (state.zahlungen||[]).find(z => z.id === id);
-  if (z) { z.status = 'Bezahlt'; z.bezahltDatum = today(); save(); renderZahlungsplan(); showToast('✅ Als bezahlt markiert', 'success'); }
+  if (!z) return;
+  z.status = 'Bezahlt'; z.bezahltDatum = today();
+  // Sync matching Kosten entry to "Bezahlt" if still Ausstehend
+  const match = (state.kosten||[]).find(k =>
+    k.status === 'Ausstehend' &&
+    Math.abs((parseFloat(k.betrag)||0) - (parseFloat(z.betrag)||0)) < 0.01 &&
+    (z.anbieter ? k.anbieter === z.anbieter : true)
+  );
+  if (match) { match.status = 'Bezahlt'; match.bezahltVon = z.bezahltVon || match.bezahltVon; }
+  save(); renderZahlungsplan(); showToast('✅ Als bezahlt markiert', 'success');
 }
 
 function renderZahlungsplan() {
@@ -7258,6 +8299,8 @@ function resetMgModal() {
 function saveMangel() {
   state.maengel = state.maengel || [];
   const editId = parseInt(document.getElementById('mg-edit-id').value) || null;
+  if (!document.getElementById('mg-titel').value.trim()) { showToast('⚠️ Bitte einen Titel eingeben', 'error'); return; }
+  if (document.getElementById('mg-status').value === 'Behoben' && !document.getElementById('mg-behoben-datum').value) { showToast('⚠️ Bitte Behebungsdatum angeben', 'error'); return; }
   const existing = editId ? state.maengel.find(m => m.id === editId) : null;
   const item = {
     id:           editId || Date.now(),
@@ -7315,6 +8358,7 @@ function deleteMangel(id) {
   if (!confirm('Mangel löschen?')) return;
   state.maengel = (state.maengel||[]).filter(m => m.id !== id);
   save(); renderMaengel();
+  showToast('🗑 Mangel gelöscht', 'success');
 }
 
 function cycleMaengelStatus(id) {
@@ -7483,10 +8527,11 @@ function renderGescannteRechnungen() {
       </td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:700">${fmt(r.brutto||0)}</td>
       <td><span class="badge ${r.status==='Bezahlt'?'badge-green':r.status==='Ausstehend'?'badge-yellow':'badge-red'}">${r.status||'–'}</span></td>
-      <td>
+      <td style="white-space:nowrap">
         ${r.scanUrl
           ? `<a href="${r.scanUrl}" target="_blank" class="action-btn" title="Original öffnen">🔗</a>`
           : ''}
+        ${r.kostenId ? `<button class="action-btn" onclick="editKosten(${r.kostenId})" title="Bearbeiten">✏️</button>` : ''}
         <button class="action-btn del" onclick="deleteGescannteRechnung(${r.id})" title="Löschen">🗑</button>
       </td>
     </tr>`;
@@ -7497,6 +8542,7 @@ function deleteGescannteRechnung(id) {
   if (!confirm('Eintrag aus der Rechnungsliste entfernen?\n(Die Ausgabe in der Kostenverfolgung bleibt erhalten.)')) return;
   state.gescannteRechnungen = (state.gescannteRechnungen||[]).filter(r => r.id !== id);
   save(); renderGescannteRechnungen();
+  showToast('🗑 Rechnung gelöscht', 'success');
 }
 
 // ══════════════════════════════════════
@@ -7514,14 +8560,18 @@ function addZahlungsPerson() {
   save();
   renderPersonenList();
   refreshBezahltVonSelects();
+  showToast('✅ Person hinzugefügt', 'success');
 }
 
 function deleteZahlungsPerson(id) {
-  if (!confirm('Person löschen? Bestehende Zuweisungen bleiben erhalten.')) return;
+  if (!confirm('Person löschen? Bestehende Zuweisungen in Rechnungen werden entfernt.')) return;
+  const person = (state.zahlungspersonen||[]).find(p => p.id === id);
+  if (person) state.kosten.forEach(k => { if (k.bezahltVon === person.name) k.bezahltVon = ''; });
   state.zahlungspersonen = (state.zahlungspersonen||[]).filter(p => p.id !== id);
   save();
   renderPersonenList();
   refreshBezahltVonSelects();
+  showToast('🗑 Person gelöscht', 'success');
 }
 
 function renderPersonenList() {
