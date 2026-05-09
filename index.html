@@ -1802,14 +1802,8 @@
     </div>
 
     <div class="nav-section" data-module="planung">Planung</div>
-    <div class="nav-item" onclick="showPage('gantt')" data-module="gantt" data-page="gantt">
-      <span class="icon">📅</span><span>Gantt-Zeitplan</span>
-    </div>
-    <div class="nav-item" onclick="showPage('abhaengigkeiten')" data-module="abhaengigkeiten" data-page="abhaengigkeiten">
-      <span class="icon">🔗</span><span>Abhängigkeiten</span>
-    </div>
-    <div class="nav-item" onclick="showPage('meilensteine')" data-module="meilensteine" data-page="meilensteine">
-      <span class="icon">🏁</span><span>Meilensteine</span>
+    <div class="nav-item" onclick="showPage('planung')" data-module="planung" data-page="planung">
+      <span class="icon">📅</span><span>Planung</span>
     </div>
     <div class="nav-item" onclick="showPage('aufgaben')" data-module="aufgaben" data-page="aufgaben">
       <span class="icon">✅</span><span>Aufgaben</span>
@@ -2118,13 +2112,7 @@
   </div>
 
   <!-- MEILENSTEINE -->
-  <div class="page" id="page-meilensteine">
-    <div class="page-header">
-      <div><h2>Meilensteine</h2><p>Deine Bauphasen im Überblick</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-milestone')">+ Meilenstein</button>
-    </div>
-    <div class="milestone-list" id="milestone-list"></div>
-  </div>
+  <div class="page" id="page-meilensteine" style="display:none!important"></div>
 
   <!-- AUFGABEN -->
   <div class="page" id="page-aufgaben">
@@ -2348,50 +2336,55 @@
   </div>
 
   <!-- GANTT -->
-  <div class="page" id="page-gantt">
+  <div class="page" id="page-gantt" style="display:none!important"></div>
+  <div class="page" id="page-abhaengigkeiten" style="display:none!important"></div>
+
+  <!-- PLANUNG (vereint: Zeitplan + Meilensteine + Ablaufplan) -->
+  <div class="page" id="page-planung">
     <div class="page-header">
-      <div><h2>Gantt-Zeitplan</h2><p>Balken verschieben &amp; skalieren per Drag</p></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="ganttZoom(-1)">− Zoom</button>
-        <button class="btn btn-ghost" onclick="ganttZoom(1)">+ Zoom</button>
-        <button class="btn btn-primary" onclick="openModal('modal-gantt')">+ Eintrag</button>
+      <div><h2>Planung</h2><p>Zeitplan, Meilensteine &amp; Ablaufplan</p></div>
+      <div id="plan-header-btns" style="display:flex;gap:8px"></div>
+    </div>
+
+    <div class="chart-tabs" style="margin-bottom:20px">
+      <button class="chart-tab active" id="plan-tab-zeitplan" onclick="showPlanTab('zeitplan',this)">📅 Zeitplan</button>
+      <button class="chart-tab" id="plan-tab-meilensteine" onclick="showPlanTab('meilensteine',this)">🏁 Meilensteine</button>
+      <button class="chart-tab" id="plan-tab-ablauf" onclick="showPlanTab('ablauf',this)">🔗 Ablaufplan</button>
+    </div>
+
+    <!-- Tab: Zeitplan -->
+    <div id="plan-sec-zeitplan">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:white;border-radius:var(--radius);border:1px solid var(--border);font-size:0.78rem;font-weight:600;color:var(--text2)">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--accent);display:inline-block"></span>Phase</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#7c3aed;display:inline-block"></span>Aufgabe</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--success);display:inline-block"></span>Erledigt</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:2px;height:12px;background:var(--danger);display:inline-block"></span>Heute</span>
+        <span style="color:var(--text3);font-weight:400">💡 Balken ziehen zum Verschieben · rechten Rand ziehen zum Verlängern</span>
+      </div>
+      <div class="table-wrap" style="overflow:hidden">
+        <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
+          <div id="gantt-interactive" style="position:relative;min-width:900px"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Legende -->
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:white;border-radius:var(--radius);border:1px solid var(--border);font-size:0.78rem;font-weight:600;color:var(--text2)">
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--accent);display:inline-block"></span>Phase</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#7c3aed;display:inline-block"></span>Aufgabe</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--success);display:inline-block"></span>Erledigt</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:2px;height:12px;background:var(--danger);display:inline-block"></span>Heute</span>
-      <span style="color:var(--text3);font-weight:400">💡 Balken ziehen zum Verschieben · rechten Rand ziehen zum Verlängern</span>
+    <!-- Tab: Meilensteine -->
+    <div id="plan-sec-meilensteine" style="display:none">
+      <div class="milestone-list" id="milestone-list"></div>
     </div>
 
-    <div class="table-wrap" style="overflow:hidden">
-      <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
-        <div id="gantt-interactive" style="position:relative;min-width:900px"></div>
+    <!-- Tab: Ablaufplan -->
+    <div id="plan-sec-ablauf" style="display:none">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:white;border-radius:12px;border:1.5px solid var(--border);font-size:0.8rem;font-weight:600;color:var(--text2)">
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#3d6ff8;display:inline-block"></span>Phase / Hauptblock</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#22c55e;display:inline-block"></span>Erledigt</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#f59e0b;display:inline-block"></span>In Arbeit</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#e2e8f4;display:inline-block"></span>Offen</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:var(--accent);display:inline-block"></span>Abhängigkeit (A → B)</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:#22c55e;border-left:2px dashed #22c55e;display:inline-block"></span>Parallel möglich</span>
       </div>
+      <div id="abh-matrix"></div>
     </div>
-  </div>
-
-  <!-- ABHÄNGIGKEITEN -->
-  <div class="page" id="page-abhaengigkeiten">
-    <div class="page-header">
-      <div><h2>Abhängigkeiten</h2><p>Was baut auf was auf – parallele &amp; sequentielle Arbeiten</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-abh-block')">+ Block hinzufügen</button>
-    </div>
-
-    <!-- Legende -->
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:white;border-radius:12px;border:1.5px solid var(--border);font-size:0.8rem;font-weight:600;color:var(--text2)">
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#3d6ff8;display:inline-block"></span>Phase / Hauptblock</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#22c55e;display:inline-block"></span>Erledigt</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#f59e0b;display:inline-block"></span>In Arbeit</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#e2e8f4;display:inline-block"></span>Offen</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:var(--accent);display:inline-block"></span>Abhängigkeit (A → B)</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:2px;height:14px;background:#22c55e;border-left:2px dashed #22c55e;display:inline-block"></span>Parallel möglich</span>
-    </div>
-
-    <div id="abh-matrix"></div>
   </div>
 
   <!-- FOTO GALERIE -->
@@ -3440,22 +3433,43 @@ function showPageHint(pageId) {
 }
 
 // ──────────────── NAVIGATION ────────────────
+function showPlanTab(tab, btn) {
+  ['zeitplan','meilensteine','ablauf'].forEach(t => {
+    document.getElementById('plan-sec-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('plan-tab-' + t)?.classList.toggle('active', t === tab);
+  });
+  const btns = document.getElementById('plan-header-btns');
+  if (tab === 'zeitplan') {
+    btns.innerHTML = `<button class="btn btn-ghost" onclick="ganttZoom(-1)">− Zoom</button><button class="btn btn-ghost" onclick="ganttZoom(1)">+ Zoom</button><button class="btn btn-primary" onclick="openModal('modal-gantt')">+ Eintrag</button>`;
+    renderGantt();
+  } else if (tab === 'meilensteine') {
+    btns.innerHTML = `<button class="btn btn-primary" onclick="openModal('modal-milestone')">+ Meilenstein</button>`;
+    renderMilestones();
+  } else {
+    btns.innerHTML = `<button class="btn btn-primary" onclick="openModal('modal-abh-block')">+ Block hinzufügen</button>`;
+    renderAbhaengigkeiten();
+  }
+}
+
 function showPage(id) {
+  // Redirect legacy planning page IDs to unified page
+  const planTabMap = { gantt: 'zeitplan', meilensteine: 'meilensteine', abhaengigkeiten: 'ablauf' };
+  const planTab = planTabMap[id];
+  if (planTab) { id = 'planung'; }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('page-' + id)?.classList.add('active');
   event && event.currentTarget && event.currentTarget.classList.add('active');
   // re-render
   if (id === 'dashboard') renderDashboard();
   if (id === 'kosten') renderKosten();
   if (id === 'budget') renderBudget();
-  if (id === 'meilensteine') renderMilestones();
   if (id === 'aufgaben') renderTasks();
   if (id === 'tagebuch') { diaryTab='log'; renderDiary(); document.getElementById('diary-list').style.display=''; document.getElementById('diary-summary').style.display='none'; document.getElementById('diary-tab-log')?.classList.add('active'); document.getElementById('diary-tab-summary')?.classList.remove('active'); }
   if (id === 'dokumente') renderNotizen();
   if (id === 'kontakte') renderKontakte();
-  if (id === 'gantt') renderGantt();
-  if (id === 'abhaengigkeiten') renderAbhaengigkeiten();
+  if (id === 'planung') showPlanTab(planTab || 'zeitplan');
   if (id === 'angebote') renderAngebote();
   if (id === 'rechnungen') renderGescannteRechnungen();
   if (id === 'zahlungsplan') renderZahlungsplan();
