@@ -2361,11 +2361,7 @@
         <span style="display:flex;align-items:center;gap:5px"><span style="width:2px;height:12px;background:var(--danger);display:inline-block"></span>Heute</span>
         <span style="color:var(--text3);font-weight:400">💡 Balken ziehen zum Verschieben · rechten Rand ziehen zum Verlängern</span>
       </div>
-      <div class="table-wrap" style="overflow:hidden">
-        <div style="overflow-x:auto;overflow-y:auto;max-height:70vh">
-          <div id="gantt-interactive" style="position:relative;min-width:900px"></div>
-        </div>
-      </div>
+      <div id="gantt-interactive"></div>
     </div>
 
     <!-- Tab: Meilensteine -->
@@ -3440,7 +3436,7 @@ function showPlanTab(tab, btn) {
   });
   const btns = document.getElementById('plan-header-btns');
   if (tab === 'zeitplan') {
-    btns.innerHTML = `<button class="btn btn-ghost" onclick="ganttZoom(-1)">− Zoom</button><button class="btn btn-ghost" onclick="ganttZoom(1)">+ Zoom</button><button class="btn btn-primary" onclick="openModal('modal-gantt')">+ Eintrag</button>`;
+    btns.innerHTML = `<button class="btn btn-ghost" onclick="ganttScrollToday()" title="Zum heutigen Datum springen">📍 Heute</button><button class="btn btn-ghost" onclick="ganttZoom(-1)">− Zoom</button><button class="btn btn-ghost" onclick="ganttZoom(1)">+ Zoom</button><button class="btn btn-primary" onclick="openModal('modal-gantt')">+ Eintrag</button>`;
     renderGantt();
   } else if (tab === 'meilensteine') {
     btns.innerHTML = `<button class="btn btn-primary" onclick="openModal('modal-milestone')">+ Meilenstein</button>`;
@@ -5490,9 +5486,9 @@ function renderKontakte() {
 }
 
 // ──────────────── GANTT INTERAKTIV ────────────────
-let ganttDayWidth = 28; // px per day – zoom level
-const GANTT_ROW_H = 48;
-const LABEL_W     = 200;
+let ganttDayWidth = 32; // px per day – zoom level
+const GANTT_ROW_H = 64;
+const LABEL_W     = 260;
 
 function resetGanttModal() {
   document.getElementById('g-edit-id').value = '';
@@ -5551,6 +5547,17 @@ function ganttZoom(dir) {
   renderGantt();
 }
 
+function ganttScrollToday() {
+  const area = document.getElementById('gantt-scroll-area');
+  if (!area) return;
+  const validGantt = state.gantt.filter(g => g.start && !isNaN(new Date(g.start)));
+  if (!validGantt.length) return;
+  const minD = new Date(Math.min(...validGantt.map(g => new Date(g.start))));
+  minD.setDate(1);
+  const todayX = daysBetween(minD.toISOString().split('T')[0], new Date().toISOString().split('T')[0]) * ganttDayWidth;
+  area.scrollTo({ left: Math.max(0, todayX - area.clientWidth / 2), behavior: 'smooth' });
+}
+
 // Date helpers
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
@@ -5571,12 +5578,12 @@ function renderGantt() {
     return;
   }
 
-  // Determine date range (add padding)
   const validGantt = state.gantt.filter(g => g.start && g.end && !isNaN(new Date(g.start)) && !isNaN(new Date(g.end)));
   if (validGantt.length === 0) {
     container.innerHTML = `<div class="empty"><div class="icon">📅</div><p>Noch keine gültigen Einträge – füge Phasen mit Start- und Enddatum hinzu!</p></div>`;
     return;
   }
+
   const allStarts = validGantt.map(g => new Date(g.start));
   const allEnds   = validGantt.map(g => new Date(g.end));
   let minD = new Date(Math.min(...allStarts));
@@ -5586,112 +5593,131 @@ function renderGantt() {
 
   const totalDays  = daysBetween(minD.toISOString().split('T')[0], maxD.toISOString().split('T')[0]);
   const totalWidth = totalDays * ganttDayWidth;
-  const today      = new Date(); today.setHours(0,0,0,0);
-  const todayX     = daysBetween(minD.toISOString().split('T')[0], today.toISOString().split('T')[0]) * ganttDayWidth;
+  const todayObj   = new Date(); todayObj.setHours(0,0,0,0);
+  const todayX     = daysBetween(minD.toISOString().split('T')[0], todayObj.toISOString().split('T')[0]) * ganttDayWidth;
 
-  // Build month headers
-  const monthNames = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const monthNamesShort = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let months = []; let cur = new Date(minD);
-  while (cur <= maxD) {
-    months.push(new Date(cur));
-    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-  }
+  while (cur <= maxD) { months.push(new Date(cur)); cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1); }
 
   const sorted = [...validGantt].sort((a,b) => new Date(a.start) - new Date(b.start));
 
   const barColors = {
-    phase_Offen:     '#3d6ff8',
-    phase_In_Arbeit: '#f59e0b',
-    phase_Erledigt:  '#16a34a',
-    task_Offen:      '#7c3aed',
-    task_In_Arbeit:  '#ea6c19',
-    task_Erledigt:   '#16a34a',
+    phase_Offen:     '#3d6ff8', phase_In_Arbeit: '#f59e0b', phase_Erledigt: '#16a34a',
+    task_Offen:      '#7c3aed', task_In_Arbeit:  '#ea6c19', task_Erledigt:  '#16a34a',
   };
-
+  const statusColors = { 'Offen': '#6b7280', 'In Arbeit': '#f59e0b', 'Erledigt': '#16a34a' };
   const getColor = (g) => barColors[`${g.type}_${g.status.replace(' ','_')}`] || '#3d6ff8';
 
-  const headerH = 36;
-  const totalH  = headerH + sorted.length * GANTT_ROW_H + 20;
+  const monthH = 28, weekH = 22, headerH = monthH + weekH;
+  const totalH = headerH + sorted.length * GANTT_ROW_H + 20;
+
+  // Build week ticks
+  let weeks = []; let wd = new Date(minD);
+  // Align to Monday
+  while (wd.getDay() !== 1) wd.setDate(wd.getDate() + 1);
+  while (wd <= maxD) { weeks.push(new Date(wd)); wd.setDate(wd.getDate() + 7); }
 
   container.innerHTML = `
-    <div style="position:relative;user-select:none">
-      <!-- SVG canvas -->
-      <div style="display:flex">
+    <div style="position:relative;user-select:none;display:flex;flex-direction:column;height:calc(100vh - 230px);min-height:400px">
+
+      <!-- Layout: label column + scrollable timeline -->
+      <div style="display:flex;flex:1;overflow:hidden">
 
         <!-- Fixed label column -->
-        <div style="width:${LABEL_W}px;flex-shrink:0;border-right:1px solid var(--border);z-index:10;background:white">
-          <div style="height:${headerH}px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;padding:0 14px;font-size:0.68rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">
-            Phase / Aufgabe
+        <div style="width:${LABEL_W}px;flex-shrink:0;border-right:2px solid var(--border);z-index:10;background:var(--bg);display:flex;flex-direction:column">
+          <!-- Header placeholder -->
+          <div style="height:${headerH}px;flex-shrink:0;border-bottom:2px solid var(--border);background:var(--surface2);display:flex;align-items:flex-end;padding:0 14px 6px;gap:8px">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Phase / Aufgabe</span>
           </div>
-          ${sorted.map((g,i) => `
-            <div style="height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:8px;background:white"
-              onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='white'">
-              <div style="flex:1;min-width:0">
-                <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
-                <div style="font-size:0.67rem;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:1px">${fmtDate(g.start)} – ${fmtDate(g.end)}</div>
-              </div>
-              <div style="display:flex;gap:2px;flex-shrink:0">
-                <button class="action-btn" onclick="editGanttItem(${g.id})" title="Bearbeiten" style="padding:3px 5px">✏️</button>
-                <button class="action-btn del" onclick="deleteGanttItem(${g.id})" style="padding:3px 5px">🗑</button>
-              </div>
-            </div>`).join('')}
+          <!-- Rows (scrollable in sync) -->
+          <div style="flex:1;overflow:hidden" id="gantt-label-scroll">
+            ${sorted.map((g,i) => {
+              const sc = statusColors[g.status] || '#6b7280';
+              const isPhase = g.type === 'phase';
+              const dur = daysBetween(g.start, g.end);
+              return `<div style="height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:10px;background:${i%2===0?'white':'var(--surface2)'}"
+                onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='${i%2===0?'white':'var(--surface2)'}'">
+                <div style="width:4px;height:36px;border-radius:2px;flex-shrink:0;background:${getColor(g)}"></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:0.84rem;font-weight:${isPhase?'700':'600'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+                    <span style="font-size:0.64rem;font-weight:600;color:${sc};background:${sc}18;padding:1px 6px;border-radius:10px">${g.status}</span>
+                    <span style="font-size:0.63rem;color:var(--text3);font-family:'JetBrains Mono',monospace">${dur}d</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:2px;flex-shrink:0">
+                  <button class="action-btn" onclick="editGanttItem(${g.id})" title="Bearbeiten" style="padding:3px 5px;font-size:0.8rem">✏️</button>
+                  <button class="action-btn del" onclick="deleteGanttItem(${g.id})" style="padding:3px 5px;font-size:0.8rem">🗑</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>
 
         <!-- Scrollable timeline -->
-        <div style="overflow-x:auto;flex:1" id="gantt-scroll-area">
+        <div style="flex:1;overflow:auto;position:relative" id="gantt-scroll-area">
           <div style="position:relative;width:${totalWidth}px;min-height:${totalH}px">
 
-            <!-- Month headers -->
-            <div style="display:flex;height:${headerH}px;border-bottom:1px solid var(--border);background:var(--surface2);position:sticky;top:0;z-index:5">
+            <!-- Month header row -->
+            <div style="position:sticky;top:0;z-index:6;height:${monthH}px;background:#f0f4ff;border-bottom:1px solid var(--border)">
               ${months.map(m => {
                 const mDays = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
-                const x     = daysBetween(minD.toISOString().split('T')[0], m.toISOString().split('T')[0]) * ganttDayWidth;
-                const w     = mDays * ganttDayWidth;
-                return `<div style="position:absolute;left:${x}px;width:${w}px;height:100%;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border);font-size:0.72rem;font-weight:600;color:var(--text2)">
-                  ${monthNames[m.getMonth()]} ${m.getFullYear()}
-                </div>`;
+                const x = daysBetween(minD.toISOString().split('T')[0], m.toISOString().split('T')[0]) * ganttDayWidth;
+                const w = mDays * ganttDayWidth;
+                const label = w > 80 ? `${monthNames[m.getMonth()]} ${m.getFullYear()}` : w > 40 ? monthNamesShort[m.getMonth()] : '';
+                return `<div style="position:absolute;left:${x}px;width:${w}px;height:100%;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border);font-size:0.75rem;font-weight:700;color:#3d6ff8">${label}</div>`;
               }).join('')}
             </div>
 
-            <!-- Grid lines (weeks) -->
-            ${Array.from({length: Math.ceil(totalDays/7)}, (_,i) => `
-              <div style="position:absolute;left:${i*7*ganttDayWidth}px;top:${headerH}px;bottom:0;width:1px;background:var(--border);opacity:0.4"></div>`
-            ).join('')}
+            <!-- Week header row -->
+            <div style="position:sticky;top:${monthH}px;z-index:6;height:${weekH}px;background:var(--surface2);border-bottom:2px solid var(--border)">
+              ${weeks.map(w => {
+                const x = daysBetween(minD.toISOString().split('T')[0], w.toISOString().split('T')[0]) * ganttDayWidth;
+                const wNum = Math.ceil((((w - new Date(w.getFullYear(),0,1))/86400000)+1)/7);
+                return `<div style="position:absolute;left:${x}px;width:${7*ganttDayWidth}px;height:100%;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border);font-size:0.62rem;font-weight:600;color:var(--text3)">KW ${wNum}</div>`;
+              }).join('')}
+            </div>
+
+            <!-- Week grid lines -->
+            ${weeks.map(w => {
+              const x = daysBetween(minD.toISOString().split('T')[0], w.toISOString().split('T')[0]) * ganttDayWidth;
+              return `<div style="position:absolute;left:${x}px;top:${headerH}px;bottom:0;width:1px;background:var(--border);opacity:0.5"></div>`;
+            }).join('')}
 
             <!-- Today line -->
             ${todayX >= 0 && todayX <= totalWidth ? `
-              <div style="position:absolute;left:${todayX}px;top:0;bottom:0;width:2px;background:var(--danger);z-index:4;opacity:0.8">
-                <div style="position:absolute;top:${headerH+2}px;left:3px;font-size:0.6rem;color:var(--danger);font-weight:700;white-space:nowrap;font-family:'JetBrains Mono',monospace">Heute</div>
+              <div style="position:absolute;left:${todayX}px;top:0;bottom:0;width:2px;background:#ef4444;z-index:4">
+                <div style="position:absolute;top:${headerH+4}px;left:4px;background:#ef4444;color:white;font-size:0.58rem;font-weight:700;padding:1px 5px;border-radius:4px;white-space:nowrap">Heute</div>
               </div>` : ''}
 
             <!-- Bars -->
             ${sorted.map((g, i) => {
               const x = daysBetween(minD.toISOString().split('T')[0], g.start) * ganttDayWidth;
-              const w = Math.max(ganttDayWidth, daysBetween(g.start, g.end) * ganttDayWidth);
+              const w = Math.max(ganttDayWidth * 1, daysBetween(g.start, g.end) * ganttDayWidth);
               const y = headerH + i * GANTT_ROW_H;
               const color = getColor(g);
-              const dur   = daysBetween(g.start, g.end);
+              const dur = daysBetween(g.start, g.end);
+              const rowBg = i%2===0 ? 'white' : 'var(--surface2)';
               return `
-                <!-- Row bg -->
-                <div style="position:absolute;left:0;top:${y}px;right:0;height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border)"></div>
-
-                <!-- Draggable bar -->
+                <div style="position:absolute;left:0;top:${y}px;width:${totalWidth}px;height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);background:${rowBg}"></div>
                 <div class="gantt-bar-drag" data-id="${g.id}"
-                  style="position:absolute;left:${x}px;top:${y+8}px;width:${w}px;height:${GANTT_ROW_H-16}px;
-                         background:${color};border-radius:6px;cursor:grab;
-                         display:flex;align-items:center;padding:0 8px;
-                         box-shadow:0 2px 6px rgba(0,0,0,0.15);z-index:3;
-                         font-size:0.72rem;font-weight:600;color:white;
+                  style="position:absolute;left:${x}px;top:${y+10}px;width:${w}px;height:${GANTT_ROW_H-20}px;
+                         background:linear-gradient(135deg,${color},${color}cc);
+                         border-radius:8px;cursor:grab;display:flex;align-items:center;padding:0 10px;
+                         box-shadow:0 2px 8px ${color}55;z-index:3;
+                         font-size:0.75rem;font-weight:700;color:white;
                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-                         transition:box-shadow 0.15s"
+                         border:1.5px solid ${color}88;
+                         transition:box-shadow 0.15s,transform 0.1s"
                   title="${g.name}: ${fmtDate(g.start)} – ${fmtDate(g.end)} (${dur} Tage)"
                   onmousedown="ganttStartDrag(event,${g.id},'move')"
-                  onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.25)'"
-                  onmouseout="this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)'">
-                  ${w > 60 ? g.name : ''}
-                  <!-- Resize handle (right) -->
-                  <div style="position:absolute;right:0;top:0;bottom:0;width:8px;cursor:ew-resize;background:rgba(255,255,255,0.25);border-radius:0 6px 6px 0"
-                    onmousedown="event.stopPropagation();ganttStartDrag(event,${g.id},'resize')"></div>
+                  onmouseover="this.style.boxShadow='0 6px 16px ${color}88';this.style.transform='translateY(-1px)'"
+                  onmouseout="this.style.boxShadow='0 2px 8px ${color}55';this.style.transform=''">
+                  <span style="text-shadow:0 1px 2px rgba(0,0,0,0.3)">${w > 50 ? g.name : ''}</span>
+                  <div style="position:absolute;right:0;top:0;bottom:0;width:10px;cursor:ew-resize;background:rgba(255,255,255,0.3);border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:white"
+                    onmousedown="event.stopPropagation();ganttStartDrag(event,${g.id},'resize')">⋮</div>
                 </div>`;
             }).join('')}
 
@@ -5700,7 +5726,18 @@ function renderGantt() {
       </div>
     </div>`;
 
-  // Attach drag listeners
+  // Sync label scroll with timeline vertical scroll
+  const scrollArea = document.getElementById('gantt-scroll-area');
+  const labelScroll = document.getElementById('gantt-label-scroll');
+  if (scrollArea && labelScroll) {
+    scrollArea.addEventListener('scroll', () => { labelScroll.scrollTop = scrollArea.scrollTop; });
+  }
+
+  // Scroll to today
+  if (scrollArea && todayX > 0) {
+    setTimeout(() => { scrollArea.scrollLeft = Math.max(0, todayX - scrollArea.clientWidth / 2); }, 50);
+  }
+
   initGanttDrag(minD);
 }
 
