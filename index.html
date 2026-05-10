@@ -4555,24 +4555,35 @@ async function handleRechnungScan(input) {
   document.getElementById('scan-error').style.display   = 'none';
   document.getElementById('scan-confirm-btn').style.display = 'none';
 
-  // Read file as base64 and wait until done
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  // Read file as base64; compress images first to avoid "Request Entity Too Large"
+  const isImage = file.type.startsWith('image/');
+  let dataUrl;
+  if (isImage) {
+    const compressed = await compressImage(file, 1280, 0.75);
+    dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(compressed);
+    });
+  } else {
+    dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 
   scanImageBase64 = dataUrl.split(',')[1];
 
-  if (file.type.startsWith('image/')) {
+  if (isImage) {
     document.getElementById('scan-preview-img').src = dataUrl;
     document.getElementById('scan-preview').style.display = 'block';
   }
 
   try {
-    const isImage = file.type.startsWith('image/');
-    const mediaType = file.type === 'application/pdf' ? 'application/pdf' : file.type || 'image/jpeg';
+    const mediaType = file.type === 'application/pdf' ? 'application/pdf' : 'image/jpeg';
 
     const response = await fetch('/api/ki', {
       method: 'POST',
