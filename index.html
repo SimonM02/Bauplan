@@ -5847,30 +5847,20 @@ function initGanttDrag(minD) {
 const STORAGE_BUCKET = 'buildora-fotos';
 
 async function uploadPhotoToStorage(file, folder = 'galerie') {
-  // Try Supabase Storage first; fall back to base64 data URL if bucket is missing
-  if (currentUser && supa) {
-    try {
-      const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
-      const fileName = `${currentUser.id}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data, error } = await supa.storage
-        .from(STORAGE_BUCKET)
-        .upload(fileName, file, { cacheControl: '3600', upsert: false });
-      if (!error) {
-        const { data: urlData } = supa.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
-        return { url: urlData.publicUrl, path: fileName };
-      }
-    } catch(e) {
-      // Storage not configured – fall through to base64
+  if (!currentUser || !supa) throw new Error('Nicht angemeldet');
+  const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
+  const fileName = `${currentUser.id}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { data, error } = await supa.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, file, { cacheControl: '3600', upsert: false });
+  if (error) {
+    if (error.message?.includes('Bucket not found') || error.message?.includes('bucket')) {
+      throw new Error('Storage-Bucket fehlt. Bitte "buildora-fotos" in Supabase → Storage anlegen (Public Bucket).');
     }
+    throw new Error('Upload fehlgeschlagen: ' + error.message);
   }
-  // Base64 fallback: store image directly in app state
-  const dataUrl = await new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload  = e => res(e.target.result);
-    r.onerror = () => rej(new Error('Datei konnte nicht gelesen werden'));
-    r.readAsDataURL(file);
-  });
-  return { url: dataUrl, path: null };
+  const { data: urlData } = supa.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+  return { url: urlData.publicUrl, path: fileName };
 }
 
 async function deletePhotoFromStorage(path) {
