@@ -1,5 +1,4 @@
-const SUPA_URL  = 'https://savrxykygruzyngttekl.supabase.co';
-const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdnJ4eWt5Z3J1enluZ3R0ZWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MTU4NTEsImV4cCI6MjA2MjI5MTg1MX0.P0Uu2NnSNDVpV1pM5hMHJqASFVjUhp4HJNVqHhI7cyg';
+const SUPA_URL = 'https://savrxykygruzyngttekl.supabase.co';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,15 +7,22 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
   if (!token) return res.status(401).json({ error: 'unauthorized' });
 
-  // Verify token
-  const userRes = await fetch(`${SUPA_URL}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: ANON_KEY }
-  });
-  const user = await userRes.json();
-  if (!userRes.ok || !user.id) return res.status(401).json({ error: 'invalid token' });
+  // Decode user_id from JWT payload (Supabase JWTs are signed RS256 – sub = user uuid)
+  let userId;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+    userId = payload.sub;
+    if (!userId) throw new Error('no sub');
+    // Basic expiry check
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return res.status(401).json({ error: 'token expired' });
+    }
+  } catch (e) {
+    return res.status(401).json({ error: 'invalid token: ' + e.message });
+  }
 
   const { subscription } = req.body;
   if (!subscription) return res.status(400).json({ error: 'subscription required' });
@@ -30,7 +36,7 @@ export default async function handler(req, res) {
       apikey: svcKey,
       Prefer: 'resolution=merge-duplicates'
     },
-    body: JSON.stringify({ user_id: user.id, subscription, updated_at: new Date().toISOString() })
+    body: JSON.stringify({ user_id: userId, subscription, updated_at: new Date().toISOString() })
   });
 
   if (!saveRes.ok) {
