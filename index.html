@@ -3922,6 +3922,7 @@ function saveKosten() {
     _pendingAngebotId = null;
   }
   save();
+  scheduleAllReminders();
   closeModal('modal-kosten');
   document.getElementById('k-edit-id').value = '';
   document.getElementById('k-modal-title').textContent = 'Ausgabe erfassen';
@@ -4486,12 +4487,13 @@ async function requestNotifications() {
 }
 
 async function enableNotifications() {
-  if (!('Notification' in window)) { showToast('⚠️ Dein Browser unterstützt keine Mitteilungen', 'error'); return; }
+  if (!('Notification' in window)) { showToast('⚠️ Dein Browser unterstützt keine Mitteilungen. Bitte die App zum Home-Bildschirm hinzufügen (iOS 16.4+)', 'error'); return; }
   const perm = await Notification.requestPermission();
   loadNotificationStatus();
   if (perm === 'granted') {
-    new Notification('Buildora', { body: '✅ Mitteilungen sind jetzt aktiv!' });
     showToast('🔔 Mitteilungen aktiviert', 'success');
+    scheduleAllReminders();
+    setTimeout(() => _showNotification('Buildora', '✅ Erinnerungen sind jetzt aktiv', 'test'), 500);
   } else {
     showToast('⚠️ Mitteilungen wurden nicht erlaubt', 'error');
   }
@@ -4794,7 +4796,7 @@ function addMilestone() {
   } else {
     state.meilensteine.push(item);
   }
-  save(); closeModal('modal-milestone');
+  save(); scheduleAllReminders(); closeModal('modal-milestone');
   ['ms-name','ms-datum','ms-text'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('ms-edit-id')) document.getElementById('ms-edit-id').value = '';
   document.getElementById('ms-modal-title') && (document.getElementById('ms-modal-title').textContent = 'Meilenstein hinzufügen');
@@ -8388,7 +8390,7 @@ function saveZahlung() {
   } else {
     state.zahlungen.push(item);
   }
-  save(); closeModal('modal-zahlung'); resetZpModal();
+  save(); scheduleAllReminders(); closeModal('modal-zahlung'); resetZpModal();
   ['zp-beschr','zp-anbieter','zp-faellig','zp-betrag','zp-bezahlt-datum','zp-notiz'].forEach(id => document.getElementById(id).value = '');
   renderZahlungsplan();
   showToast('✅ Zahlung gespeichert', 'success');
@@ -9099,18 +9101,34 @@ async function refreshApp() {
 }
 
 // ── NOTIFICATIONS ───────────────────────────────────────────────────────────
-const _notifTimers = {};
+let _notifTimers = {};
 
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    // Once SW is active, schedule reminders
+    reg.addEventListener('updatefound', () => {
+      reg.installing?.addEventListener('statechange', e => {
+        if (e.target.state === 'activated') scheduleAllReminders();
+      });
+    });
   } catch(e) { console.warn('SW registration failed:', e); }
 }
 
-async function _getSW() {
-  if (!('serviceWorker' in navigator)) return null;
-  try { return (await navigator.serviceWorker.ready).active; } catch { return null; }
+async function _showNotification(title, body, tag) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, {
+      body,
+      tag: tag || 'buildora',
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%233d6ff8"/><path d="M16 7L5 16h3v9h7v-5h2v5h7v-9h3z" fill="white"/></svg>',
+      vibrate: [200, 100, 200]
+    });
+  } catch {
+    try { new Notification(title, { body }); } catch(e2) { console.warn('Notification failed', e2); }
+  }
 }
 
 async function requestNotifPermission(showUi = true) {
@@ -9124,37 +9142,80 @@ async function requestNotifPermission(showUi = true) {
   return result === 'granted';
 }
 
-async function scheduleTaskReminders() {
+// Central scheduler — called after every save and on app foreground
+async function scheduleAllReminders() {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const sw = await _getSW();
-  if (!sw) return;
-  const now = Date.now();
-  // Clear existing timers
-  Object.values(_notifTimers).forEach(clearTimeout);
-  for (const k in _notifTimers) delete _notifTimers[k];
 
-  for (const task of (state.aufgaben || [])) {
-    if (!task.datum || !task.time || task.status === 'Erledigt') continue;
-    const dt = new Date(task.datum + 'T' + task.time);
+  // Cancel previous timers
+  Object.values(_notifTimers).forEach(clearTimeout);
+  _notifTimers = {};
+
+  const now  = Date.now();
+  const defT = state.settings?.notifTime || '08:00'; // default reminder time
+
+  function sched(key, dateStr, timeStr, title, body) {
+    if (!dateStr) return;
+    const dt    = new Date(dateStr + 'T' + (timeStr || defT));
     const delay = dt.getTime() - now;
-    // Schedule up to 7 days ahead, and allow up to 1 min past (missed by a hair)
-    if (delay < -60000 || delay > 7 * 86400000) continue;
-    const effectiveDelay = Math.max(0, delay);
-    _notifTimers[task.id] = setTimeout(() => {
-      const active = _getSW();
-      active.then(s => {
-        if (!s) return;
-        s.postMessage({
-          type: 'SHOW_NOTIFICATION',
-          title: '🔔 ' + task.name,
-          body: (task.person ? '👤 ' + task.person + '  ' : '') + (task.notiz ? task.notiz.slice(0, 100) : 'Aufgabe fällig'),
-          tag: 'task-' + task.id,
-          taskId: task.id
-        });
-      });
-    }, effectiveDelay);
+    if (delay < -60000 || delay > 14 * 86400000) return; // between -1min and 14 days
+    _notifTimers[key] = setTimeout(() => _showNotification(title, body, key), Math.max(0, delay));
+  }
+
+  function daysBefore(dateStr, n) {
+    const d = new Date(dateStr); d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // ── Aufgaben (mit Uhrzeit)
+  for (const t of (state.aufgaben || [])) {
+    if (!t.datum || t.status === 'Erledigt') continue;
+    if (t.time) {
+      sched('task-' + t.id, t.datum, t.time,
+        '🔔 ' + t.name,
+        (t.person ? '👤 ' + t.person + '  ' : '') + (t.notiz?.slice(0,100) || 'Aufgabe fällig'));
+    } else {
+      // Ohne Zeit: am Fälligkeitstag zur Standard-Uhrzeit erinnern
+      sched('task-day-' + t.id, t.datum, defT,
+        '📅 Fällig heute: ' + t.name,
+        t.person ? '👤 ' + t.person : 'Aufgabe fällig');
+    }
+  }
+
+  // ── Meilensteine
+  for (const m of (state.meilensteine || [])) {
+    if (!m.datum || m.done) continue;
+    sched('ms-' + m.id, m.datum, defT,
+      '🏁 Meilenstein heute: ' + m.name, 'Fällig heute');
+    sched('ms-pre-' + m.id, daysBefore(m.datum, 1), defT,
+      '⚠️ Morgen: ' + m.name, 'Meilenstein morgen fällig');
+  }
+
+  // ── Skonto-Fristen
+  for (const k of (state.kosten || [])) {
+    if (!k.skontoBis || !k.skontoProz || k.status === 'Bezahlt' || k.status === 'Storniert') continue;
+    const save = fmt(k.betrag * k.skontoProz / 100);
+    const name = k.beschr || k.anbieter || 'Rechnung';
+    sched('skonto-3-' + k.id, daysBefore(k.skontoBis, 3), defT,
+      '💰 Skonto: ' + name, `Noch 3 Tage – ${save} sparen (bis ${fmtDate(k.skontoBis)})`);
+    sched('skonto-1-' + k.id, daysBefore(k.skontoBis, 1), defT,
+      '💰 Skonto morgen weg: ' + name, `Letzter Tag – ${save} sparen`);
+    sched('skonto-0-' + k.id, k.skontoBis, defT,
+      '💰 Heute letzter Tag Skonto: ' + name, `${save} sparen – heute bezahlen`);
+  }
+
+  // ── Zahlungsplan
+  for (const z of (state.zahlungen || [])) {
+    if (!z.faellig || z.status === 'Bezahlt') continue;
+    const name = z.beschr || z.empfaenger || 'Zahlung';
+    sched('zahlung-3-' + z.id, daysBefore(z.faellig, 3), defT,
+      '📅 Zahlung in 3 Tagen: ' + name, `${fmt(z.betrag)} fällig am ${fmtDate(z.faellig)}`);
+    sched('zahlung-0-' + z.id, z.faellig, defT,
+      '💶 Zahlung heute fällig: ' + name, `${fmt(z.betrag)} heute fällig`);
   }
 }
+
+// Alias for backward compat
+const scheduleTaskReminders = scheduleAllReminders;
 
 // Called when user sets a time — ask for permission and update hint
 async function onTaskTimeChange() {
@@ -9164,13 +9225,13 @@ async function onTaskTimeChange() {
   if (!timeEl?.value) { hint.style.display = 'none'; return; }
   hint.style.display = 'block';
   if (!('Notification' in window)) {
-    hint.innerHTML = '<span style="color:var(--text3)">Benachrichtigungen werden in diesem Browser nicht unterstützt</span>';
+    hint.innerHTML = '<span style="color:var(--text3)">Nicht unterstützt – App zum Home-Bildschirm hinzufügen (iOS 16.4+)</span>';
     return;
   }
   if (Notification.permission === 'granted') {
     hint.innerHTML = '<span style="color:var(--success)">✓ Benachrichtigungen aktiv</span>';
   } else if (Notification.permission === 'denied') {
-    hint.innerHTML = '<span style="color:var(--danger)">⚠️ Blockiert – bitte in den iPhone-Einstellungen freigeben (Einstellungen → Safari / App → Benachrichtigungen)</span>';
+    hint.innerHTML = '<span style="color:var(--danger)">⚠️ Blockiert – Einstellungen → Safari → Buildora → Mitteilungen</span>';
   } else {
     hint.innerHTML = '<button class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px" onclick="enableNotifFromModal()">🔔 Benachrichtigungen erlauben</button>';
   }
@@ -9183,18 +9244,23 @@ async function enableNotifFromModal() {
   if (granted) {
     hint.innerHTML = '<span style="color:var(--success)">✓ Benachrichtigungen aktiv</span>';
     showToast('✅ Benachrichtigungen aktiviert', 'success');
+    scheduleAllReminders();
   } else {
     hint.innerHTML = '<span style="color:var(--danger)">⚠️ Nicht erlaubt – bitte in den Einstellungen aktivieren</span>';
   }
 }
 
-// Re-schedule on visibility change (app comes back to foreground)
+// Re-schedule whenever app comes back to foreground
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') scheduleTaskReminders();
+  if (document.visibilityState === 'visible') scheduleAllReminders();
 });
 
-// Init on load
-registerSW();
+// Init on load — SW first, then schedule after ready
+registerSW().then(() => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(() => scheduleAllReminders());
+  }
+});
 
 // Sync immediately when page is about to close
 window.addEventListener('beforeunload', () => {
