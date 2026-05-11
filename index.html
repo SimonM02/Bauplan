@@ -1851,8 +1851,12 @@
       <span>⚙️</span><span>Einstellungen</span>
     </button>
   </div>
-  <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between">
-    <span id="auth-user-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">v3.0 · Buildora</span>
+  <div style="padding:4px 14px 2px;font-size:0.67rem;min-height:16px" id="sync-status"></div>
+  <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+    <span id="auth-user-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-size:0.78rem">v3.0 · Buildora</span>
+    <button onclick="refreshApp()" title="Alle Daten neu laden"
+      style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.9rem;padding:2px 4px;flex-shrink:0"
+      onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">🔄</button>
     <button onclick="doLogout()" title="Abmelden"
       style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.9rem;padding:2px 4px;flex-shrink:0"
       onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">⎋</button>
@@ -3310,19 +3314,29 @@ let state = EMPTY_PROJECT(); // active project data (alias)
 const PROJECT_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#64748b'];
 
 function saveAll() {
-  // Sync active state back into projects array
   const idx = projects.findIndex(p => p.id === currentProjectId);
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
-  localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-  localStorage.setItem('bauplan_current', String(currentProjectId));
-  // Cloud sync debounced
+  const ts = new Date().toISOString();
+  localStorage.setItem('bauplan_projects',   JSON.stringify(projects));
+  localStorage.setItem('bauplan_current',    String(currentProjectId));
+  localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
+  localStorage.setItem('bauplan_updated_at', ts);
   if (currentUser) {
+    setSyncStatus('pending');
     clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(syncToCloud, 2000);
+    syncTimeout = setTimeout(syncToCloud, 500); // reduced from 2000ms
   }
 }
 
 function save() { saveAll(); }
+
+function setSyncStatus(status) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (status === 'pending') { el.textContent = '🔄 Speichern…'; el.style.color = 'var(--text3)'; }
+  else if (status === 'ok')  { el.textContent = '✓ Gespeichert';  el.style.color = 'var(--success)'; setTimeout(() => { el.textContent = ''; }, 3000); }
+  else if (status === 'err') { el.textContent = '⚠ Sync-Fehler'; el.style.color = 'var(--danger)'; }
+}
 
 function loadAll() {
   const raw = localStorage.getItem('bauplan_projects');
@@ -7414,12 +7428,17 @@ async function onAuthSuccess(user, isNewUser = false) {
   const emailEl = document.getElementById('auth-user-email');
   if (emailEl) emailEl.textContent = user.email;
 
-  // Clear any stale localStorage from a previous user before loading
-  localStorage.removeItem('bauplan_projects');
-  localStorage.removeItem('bauplan_current');
-  localStorage.removeItem('bauplan_data');
+  // Clear localStorage ONLY if it belongs to a different user
+  const localOwner = localStorage.getItem('bauplan_user_id');
+  if (localOwner && localOwner !== user.id) {
+    localStorage.removeItem('bauplan_projects');
+    localStorage.removeItem('bauplan_current');
+    localStorage.removeItem('bauplan_data');
+    localStorage.removeItem('bauplan_user_id');
+    localStorage.removeItem('bauplan_updated_at');
+  }
 
-  // Load data from cloud
+  // Load data from cloud (with local timestamp comparison)
   const cloudData = await loadFromCloud();
 
   // Check onboarding: use cloud flag OR isNewUser OR no projects loaded
@@ -7442,15 +7461,19 @@ async function syncToCloud() {
     const idx = projects.findIndex(p => p.id === currentProjectId);
     if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
 
+    const ts = new Date().toISOString();
+    localStorage.setItem('bauplan_updated_at', ts); // keep local timestamp in sync
+
     const payload = {
       user_id: currentUser.id,
       typ: 'all_projects',
       daten: {
         projects,
         currentProjectId,
-        onboarded: true  // store flag in cloud so it persists across devices
+        onboarded: true,
+        updated_at: ts
       },
-      updated_at: new Date().toISOString()
+      updated_at: ts
     };
 
     // Check if row exists
@@ -7461,17 +7484,34 @@ async function syncToCloud() {
       const { error } = await supa.from('projektdaten').update({
         daten: payload.daten, updated_at: payload.updated_at
       }).eq('user_id', currentUser.id);
-      if (error) console.error('Sync update error:', error.message);
+      if (error) { console.error('Sync update error:', error.message); setSyncStatus('err'); return; }
     } else {
       const { error } = await supa.from('projektdaten').insert(payload);
-      if (error) console.error('Sync insert error:', error.message);
+      if (error) { console.error('Sync insert error:', error.message); setSyncStatus('err'); return; }
     }
-    // Local backup
-    localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-    localStorage.setItem('bauplan_current', String(currentProjectId));
+    setSyncStatus('ok');
   } catch(e) {
     console.error('Sync error:', e.message);
+    setSyncStatus('err');
   }
+}
+
+function _loadFromLocalStorage() {
+  const raw = localStorage.getItem('bauplan_projects');
+  const cur = localStorage.getItem('bauplan_current');
+  if (raw) {
+    try {
+      projects = JSON.parse(raw);
+      const savedId = cur ? parseInt(cur) : null;
+      const found = savedId && projects.find(p => p.id === savedId);
+      currentProjectId = found ? found.id : projects[0]?.id;
+      loadProject(currentProjectId, false);
+      return;
+    } catch(e) { /* fall through */ }
+  }
+  projects = [EMPTY_PROJECT()];
+  currentProjectId = projects[0].id;
+  loadProject(currentProjectId, false);
 }
 
 async function loadFromCloud() {
@@ -7484,11 +7524,20 @@ async function loadFromCloud() {
 
     if (error) {
       console.error('Load error:', error.message);
-      // Start fresh – never load another user's localStorage data
-      projects = [EMPTY_PROJECT()];
-      currentProjectId = projects[0].id;
-      loadProject(currentProjectId, false);
+      _loadFromLocalStorage();
       return null;
+    }
+
+    const cloudTs    = data?.updated_at || data?.daten?.updated_at || '';
+    const localTs    = localStorage.getItem('bauplan_updated_at') || '';
+    const localOwner = localStorage.getItem('bauplan_user_id') || '';
+
+    // If localStorage has NEWER data for THIS user → use it and immediately re-sync
+    if (localOwner === currentUser?.id && localTs && cloudTs && localTs > cloudTs) {
+      console.log('Local data is newer than cloud – using local and re-syncing');
+      _loadFromLocalStorage();
+      syncToCloud(); // push the newer local state to cloud
+      return data?.daten || null;
     }
 
     if (data?.daten?.projects?.length > 0) {
@@ -7497,23 +7546,26 @@ async function loadFromCloud() {
       const found = savedId && projects.find(p => p.id === savedId);
       currentProjectId = found ? found.id : projects[0].id;
       loadProject(currentProjectId, false);
-      // Update local cache for this user
-      localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-      localStorage.setItem('bauplan_current', String(currentProjectId));
+      localStorage.setItem('bauplan_projects',   JSON.stringify(projects));
+      localStorage.setItem('bauplan_current',    String(currentProjectId));
+      localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
+      localStorage.setItem('bauplan_updated_at', cloudTs);
       return data.daten;
     }
 
-    // No cloud data yet for this user – start fresh (never use stale localStorage)
-    projects = [EMPTY_PROJECT()];
-    currentProjectId = projects[0].id;
-    loadProject(currentProjectId, false);
+    // No cloud data yet – check if localStorage has data for this user
+    if (localOwner === currentUser?.id) {
+      _loadFromLocalStorage();
+    } else {
+      projects = [EMPTY_PROJECT()];
+      currentProjectId = projects[0].id;
+      loadProject(currentProjectId, false);
+    }
     return null;
 
   } catch(e) {
     console.error('Load exception:', e.message);
-    projects = [EMPTY_PROJECT()];
-    currentProjectId = projects[0].id;
-    loadProject(currentProjectId, false);
+    _loadFromLocalStorage();
     return null;
   }
 }
@@ -8921,6 +8973,37 @@ function renderKostenaufteilung() {
     }
   });
 })();
+
+// ── REFRESH & BEFOREUNLOAD ──────────────────────────────────────────────────
+async function refreshApp() {
+  const btn = document.querySelector('[onclick="refreshApp()"]');
+  if (btn) { btn.style.animation = 'spin 0.8s linear'; btn.disabled = true; }
+  if (currentUser) {
+    // Re-load from cloud and force-overwrite local
+    localStorage.removeItem('bauplan_updated_at'); // force cloud data to win
+    const cloudData = await loadFromCloud();
+    applyModuleVisibility();
+    renderDashboard();
+    // Re-render current page
+    const activePage = document.querySelector('.page.active');
+    if (activePage) {
+      const pageId = activePage.id.replace('page-', '');
+      showPage(pageId);
+    }
+    showToast('✅ Daten aktualisiert', 'success');
+  } else {
+    location.reload();
+  }
+  if (btn) { btn.style.animation = ''; btn.disabled = false; }
+}
+
+// Sync immediately when page is about to close
+window.addEventListener('beforeunload', () => {
+  if (currentUser && syncTimeout) {
+    clearTimeout(syncTimeout);
+    syncToCloud(); // async – fires but may not fully complete; localStorage is the safety net
+  }
+});
 
 // ── PDF EXPORT ──────────────────────────────────────────────────────────────
 function pdfHeader(doc, title, subtitle) {
