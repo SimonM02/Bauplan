@@ -9114,7 +9114,12 @@ async function registerSW() {
 
 // Called once after permission is granted – registers device for server-side push
 async function subscribeToPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !currentUser) return;
+  if (!currentUser) { showToast('⚠️ Nicht eingeloggt', 'error'); return; }
+  if (!('serviceWorker' in navigator)) { showToast('⚠️ Service Worker nicht unterstützt', 'error'); return; }
+  if (!('PushManager' in window)) {
+    showToast('⚠️ Push nicht verfügbar – App muss als PWA am Home-Bildschirm installiert sein (iOS 16.4+)', 'error', 6000);
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.ready;
     const key  = Uint8Array.from(atob(VAPID_PUBLIC_KEY.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
@@ -9123,14 +9128,23 @@ async function subscribeToPush() {
 
     const { data: { session } } = await supa.auth.getSession();
     const token = session?.access_token;
-    if (!token) return;
+    if (!token) { showToast('⚠️ Kein Session-Token', 'error'); return; }
 
-    await fetch('/api/push-subscribe', {
+    const res = await fetch('/api/push-subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ subscription: sub.toJSON() })
     });
-  } catch(e) { console.warn('Push subscription failed:', e); }
+    if (res.ok) {
+      showToast('📱 Gerät für Hintergrund-Push registriert', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast('⚠️ Push-Registrierung fehlgeschlagen: ' + (err.error || res.status), 'error', 6000);
+    }
+  } catch(e) {
+    showToast('⚠️ Push-Fehler: ' + e.message, 'error', 6000);
+    console.error('Push subscription failed:', e);
+  }
 }
 
 async function _showNotification(title, body, tag) {
