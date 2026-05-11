@@ -6,6 +6,10 @@
 <title>Buildora – Mein Bauprojekt</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233d6ff8'/><path d='M16 7L5 16h3v9h7v-5h2v5h7v-9h3z' fill='white'/></svg>">
 <meta name="theme-color" content="#3d6ff8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Buildora">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233d6ff8'/><path d='M16 7L5 16h3v9h7v-5h2v5h7v-9h3z' fill='white'/></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -2878,7 +2882,15 @@
     <div class="form-row"><label>Priorität</label>
       <select id="t-prio"><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select>
     </div>
-    <div class="form-row"><label>Fällig am</label><input type="date" id="t-datum"></div>
+    <div class="form-row">
+      <label>Fällig am</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" id="t-datum" style="flex:1">
+        <input type="time" id="t-time" style="width:108px" title="Erinnerungszeit (optional)" onchange="onTaskTimeChange()">
+        <span title="Benachrichtigung zur eingestellten Zeit" style="font-size:1rem;cursor:default">🔔</span>
+      </div>
+      <div id="t-notif-status" style="font-size:0.72rem;margin-top:5px;display:none"></div>
+    </div>
     <div class="form-row">
       <label>Zugewiesen an</label>
       <input type="text" id="t-person" list="t-person-list" placeholder="Person zuweisen (optional)">
@@ -3392,6 +3404,8 @@ function loadProject(id, rerender = true) {
     showPage('dashboard');
     saveAll();
   }
+  // Schedule task reminders for newly loaded project
+  scheduleTaskReminders();
 }
 
 function updateProjectHeader() {
@@ -4871,6 +4885,7 @@ function saveTask() {
     name,
     prio:   document.getElementById('t-prio').value,
     datum:  document.getElementById('t-datum').value || '',
+    time:   document.getElementById('t-time')?.value || '',
     person: document.getElementById('t-person').value.trim() || '',
     notiz:  document.getElementById('t-notiz').value.trim() || '',
     status: editId ? (state.aufgaben.find(t => t.id === editId)?.status || 'Offen') : 'Offen'
@@ -4883,6 +4898,7 @@ function saveTask() {
   }
   _syncTaskNotiz(item);
   save();
+  scheduleTaskReminders();
   closeModal('modal-task');
   resetTaskModal();
   renderTasks();
@@ -4911,9 +4927,11 @@ function _syncTaskNotiz(task) {
 }
 
 function resetTaskModal() {
-  ['t-name','t-datum','t-notiz','t-person'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['t-name','t-datum','t-time','t-notiz','t-person'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('t-edit-id').value = '';
   document.getElementById('t-modal-title').textContent = 'Aufgabe hinzufügen';
+  const hint = document.getElementById('t-notif-status');
+  if (hint) hint.style.display = 'none';
 }
 
 function editTask(id) {
@@ -4924,6 +4942,8 @@ function editTask(id) {
   document.getElementById('t-datum').value  = t.datum  || '';
   document.getElementById('t-notiz').value  = t.notiz  || '';
   document.getElementById('t-person').value = t.person || '';
+  const timeEl = document.getElementById('t-time');
+  if (timeEl) { timeEl.value = t.time || ''; if (t.time) onTaskTimeChange(); }
   const pSel = document.getElementById('t-prio');
   Array.from(pSel.options).forEach(o => { if (o.value === t.prio) o.selected = true; });
   if (document.getElementById('t-edit-id')) document.getElementById('t-edit-id').value = id;
@@ -5031,10 +5051,12 @@ function renderTasks() {
     const isOverdue = dueDate && !isDone && dueDate < today;
     const isDueToday = dueDate && !isDone && dueDate.getTime() === today.getTime();
 
+    const timeLabel = t.time ? ` ${t.time} Uhr` : '';
     let dueBadge = '';
-    if (isOverdue)  dueBadge = `<span class="badge badge-red" style="font-size:0.65rem">⚠️ Überfällig</span>`;
-    else if (isDueToday) dueBadge = `<span class="badge badge-yellow" style="font-size:0.65rem">📅 Heute</span>`;
-    else if (dueDate) dueBadge = `<span class="badge badge-gray" style="font-size:0.65rem">${fmtDate(t.datum)}</span>`;
+    if (isOverdue)  dueBadge = `<span class="badge badge-red" style="font-size:0.65rem">⚠️ Überfällig${timeLabel}</span>`;
+    else if (isDueToday) dueBadge = `<span class="badge badge-yellow" style="font-size:0.65rem">📅 Heute${timeLabel}</span>`;
+    else if (dueDate) dueBadge = `<span class="badge badge-gray" style="font-size:0.65rem">${fmtDate(t.datum)}${timeLabel}</span>`;
+    if (t.time && !isDone) dueBadge += `<span style="font-size:0.65rem;color:var(--text3)" title="Erinnerung gesetzt">🔔</span>`;
 
     return `
     <div style="background:white;border:1.5px solid ${isDone?'var(--border)':isOverdue?'#fecaca':'var(--border)'};border-radius:14px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;box-shadow:var(--shadow);transition:all 0.2s;opacity:${isDone?'0.65':'1'}"
@@ -9075,6 +9097,104 @@ async function refreshApp() {
   }
   if (btn) { btn.style.animation = ''; btn.disabled = false; }
 }
+
+// ── NOTIFICATIONS ───────────────────────────────────────────────────────────
+const _notifTimers = {};
+
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  } catch(e) { console.warn('SW registration failed:', e); }
+}
+
+async function _getSW() {
+  if (!('serviceWorker' in navigator)) return null;
+  try { return (await navigator.serviceWorker.ready).active; } catch { return null; }
+}
+
+async function requestNotifPermission(showUi = true) {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    if (showUi) showToast('❌ Benachrichtigungen blockiert – bitte in den Einstellungen freigeben', 'error');
+    return false;
+  }
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+async function scheduleTaskReminders() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const sw = await _getSW();
+  if (!sw) return;
+  const now = Date.now();
+  // Clear existing timers
+  Object.values(_notifTimers).forEach(clearTimeout);
+  for (const k in _notifTimers) delete _notifTimers[k];
+
+  for (const task of (state.aufgaben || [])) {
+    if (!task.datum || !task.time || task.status === 'Erledigt') continue;
+    const dt = new Date(task.datum + 'T' + task.time);
+    const delay = dt.getTime() - now;
+    // Schedule up to 7 days ahead, and allow up to 1 min past (missed by a hair)
+    if (delay < -60000 || delay > 7 * 86400000) continue;
+    const effectiveDelay = Math.max(0, delay);
+    _notifTimers[task.id] = setTimeout(() => {
+      const active = _getSW();
+      active.then(s => {
+        if (!s) return;
+        s.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: '🔔 ' + task.name,
+          body: (task.person ? '👤 ' + task.person + '  ' : '') + (task.notiz ? task.notiz.slice(0, 100) : 'Aufgabe fällig'),
+          tag: 'task-' + task.id,
+          taskId: task.id
+        });
+      });
+    }, effectiveDelay);
+  }
+}
+
+// Called when user sets a time — ask for permission and update hint
+async function onTaskTimeChange() {
+  const timeEl = document.getElementById('t-time');
+  const hint   = document.getElementById('t-notif-status');
+  if (!hint) return;
+  if (!timeEl?.value) { hint.style.display = 'none'; return; }
+  hint.style.display = 'block';
+  if (!('Notification' in window)) {
+    hint.innerHTML = '<span style="color:var(--text3)">Benachrichtigungen werden in diesem Browser nicht unterstützt</span>';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    hint.innerHTML = '<span style="color:var(--success)">✓ Benachrichtigungen aktiv</span>';
+  } else if (Notification.permission === 'denied') {
+    hint.innerHTML = '<span style="color:var(--danger)">⚠️ Blockiert – bitte in den iPhone-Einstellungen freigeben (Einstellungen → Safari / App → Benachrichtigungen)</span>';
+  } else {
+    hint.innerHTML = '<button class="btn btn-ghost" style="font-size:0.75rem;padding:4px 10px" onclick="enableNotifFromModal()">🔔 Benachrichtigungen erlauben</button>';
+  }
+}
+
+async function enableNotifFromModal() {
+  const granted = await requestNotifPermission(false);
+  const hint = document.getElementById('t-notif-status');
+  if (!hint) return;
+  if (granted) {
+    hint.innerHTML = '<span style="color:var(--success)">✓ Benachrichtigungen aktiv</span>';
+    showToast('✅ Benachrichtigungen aktiviert', 'success');
+  } else {
+    hint.innerHTML = '<span style="color:var(--danger)">⚠️ Nicht erlaubt – bitte in den Einstellungen aktivieren</span>';
+  }
+}
+
+// Re-schedule on visibility change (app comes back to foreground)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') scheduleTaskReminders();
+});
+
+// Init on load
+registerSW();
 
 // Sync immediately when page is about to close
 window.addEventListener('beforeunload', () => {
