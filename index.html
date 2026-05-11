@@ -1767,7 +1767,12 @@
       <h1 id="current-project-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Buildora</h1>
       <span id="current-project-sub" style="display:block">Projekt wechseln ▾</span>
     </div>
+    <button onclick="event.stopPropagation();refreshApp()" id="refresh-btn" title="Alle Daten neu laden"
+      style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:1.05rem;padding:5px 6px;flex-shrink:0;border-radius:7px;transition:all 0.15s;line-height:1"
+      onmouseover="this.style.background='var(--surface2)';this.style.color='var(--accent)'"
+      onmouseout="this.style.background='none';this.style.color='var(--text3)'">🔄</button>
   </div>
+  <div id="sync-status" style="padding:2px 16px 3px;font-size:0.67rem;min-height:18px;border-bottom:1px solid var(--border)"></div>
   <nav>
     <div class="nav-section">Übersicht</div>
     <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
@@ -1851,12 +1856,8 @@
       <span>⚙️</span><span>Einstellungen</span>
     </button>
   </div>
-  <div style="padding:4px 14px 2px;font-size:0.67rem;min-height:16px" id="sync-status"></div>
   <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between;gap:4px">
     <span id="auth-user-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-size:0.78rem">v3.0 · Buildora</span>
-    <button onclick="refreshApp()" title="Alle Daten neu laden"
-      style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.9rem;padding:2px 4px;flex-shrink:0"
-      onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">🔄</button>
     <button onclick="doLogout()" title="Abmelden"
       style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.9rem;padding:2px 4px;flex-shrink:0"
       onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">⎋</button>
@@ -3522,7 +3523,7 @@ function openModal(id) {
   }
   if (id === 'modal-kosten' || id === 'modal-eigenleistung' || id === 'modal-rechnung-scan') {
     const editId = document.getElementById('k-edit-id')?.value;
-    if (!editId) refreshAllKatSelects();
+    if (!editId) { refreshAllKatSelects(_pendingKostenKat); _pendingKostenKat = ''; }
   }
   // Tagebuch: auto-fetch weather for new entries
   if (id === 'modal-tagebuch' && !document.getElementById('tb-edit-id')?.value) {
@@ -3953,7 +3954,10 @@ function deleteKosten(id) {
 function addKosten() { saveKosten(); }
 
 // ──────────────── BUDGET DRILLDOWN ────────────────
+let _pendingKostenKat = '';
+
 function openBudgetDrilldown(katName) {
+  _pendingKostenKat = katName;
   const kat    = state.budgetKat.find(b => b.name === katName) || {};
   const items  = state.kosten.filter(k => k.kat === katName && k.status !== 'Storniert');
   const budget = kat.budget || 0;
@@ -4003,8 +4007,6 @@ function openBudgetDrilldown(katName) {
     }).join('');
   }
 
-  // pre-select kat for new entry
-  setTimeout(() => refreshAllKatSelects(katName), 50);
   openModal('modal-budget-drilldown');
 }
 
