@@ -2276,8 +2276,15 @@
               <span id="notif-status-badge" class="badge badge-gray" style="flex-shrink:0">–</span>
             </div>
             <button id="notif-allow-btn" onclick="enableNotifications()" class="btn btn-primary" style="font-size:0.82rem">🔔 Erlauben</button>
-            <div style="font-size:0.75rem;color:var(--text3);background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.55">
-              Mitteilungen erscheinen automatisch beim nächsten Öffnen der App, wenn eine Fälligkeit <strong>innerhalb von 3 Tagen</strong> liegt.
+            <div id="push-register-row" style="display:none;gap:8px;flex-direction:column">
+              <div style="display:flex;gap:8px">
+                <button onclick="subscribeToPush()" class="btn btn-ghost" style="font-size:0.8rem;flex:1">📱 Gerät für Hintergrund-Push registrieren</button>
+                <button onclick="runPushDiag()" class="btn btn-ghost" style="font-size:0.8rem;padding:0 10px" title="Diagnose">🔍</button>
+              </div>
+              <div id="push-diag-output" style="display:none;font-size:0.73rem;font-family:monospace;background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.7;white-space:pre-wrap;color:var(--text2)"></div>
+            </div>
+            <div id="push-info-box" style="font-size:0.75rem;color:var(--text3);background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.55">
+              Für Erinnerungen auch bei gesperrtem Handy: App zum <strong>Home-Bildschirm hinzufügen</strong> (iOS: Teilen → „Zum Home-Bildschirm") und danach Mitteilungen erlauben (iOS 16.4+).
             </div>
           </div>
 
@@ -4513,18 +4520,22 @@ function loadNotificationStatus() {
     return;
   }
   const p = Notification.permission;
+  const pushRow = document.getElementById('push-register-row');
   if (p === 'granted') {
     label.textContent = 'Mitteilungen sind aktiv';
     badge.textContent = '✅ Erlaubt'; badge.className = 'badge badge-green';
     if (btn) btn.style.display = 'none';
+    if (pushRow) pushRow.style.display = 'flex';
   } else if (p === 'denied') {
     label.textContent = 'Mitteilungen sind blockiert';
     badge.textContent = '🚫 Blockiert'; badge.className = 'badge badge-red';
     if (btn) { btn.textContent = '⚙️ Browser-Einstellungen öffnen'; btn.onclick = () => showToast('Bitte in den Browser-Einstellungen → Datenschutz → Benachrichtigungen für diese Seite erlauben', 'warning', 8000); }
+    if (pushRow) pushRow.style.display = 'none';
   } else {
     label.textContent = 'Noch nicht aktiviert';
     badge.textContent = '○ Inaktiv'; badge.className = 'badge badge-yellow';
     if (btn) btn.style.display = '';
+    if (pushRow) pushRow.style.display = 'none';
   }
 }
 
@@ -9145,6 +9156,83 @@ async function subscribeToPush() {
     showToast('⚠️ Push-Fehler: ' + e.message, 'error', 6000);
     console.error('Push subscription failed:', e);
   }
+}
+
+async function runPushDiag() {
+  const out = document.getElementById('push-diag-output');
+  if (!out) return;
+  out.style.display = 'block';
+  const lines = [];
+  const ok  = t => `✅ ${t}`;
+  const err = t => `❌ ${t}`;
+  const wrn = t => `⚠️ ${t}`;
+
+  lines.push('--- Push-Diagnose ---');
+
+  // 1 Service Worker
+  if (!('serviceWorker' in navigator)) { lines.push(err('Service Worker: nicht unterstützt')); out.textContent = lines.join('\n'); return; }
+  lines.push(ok('Service Worker: unterstützt'));
+
+  // 2 PushManager
+  if (!('PushManager' in window)) {
+    lines.push(err('PushManager: NICHT verfügbar'));
+    lines.push(wrn('→ App muss als PWA am Home-Bildschirm installiert sein (iOS 16.4+)'));
+    out.textContent = lines.join('\n'); return;
+  }
+  lines.push(ok('PushManager: verfügbar (PWA erkannt ✓)'));
+
+  // 3 Notification permission
+  lines.push(Notification.permission === 'granted' ? ok('Mitteilungen: erlaubt') : err('Mitteilungen: ' + Notification.permission));
+
+  // 4 SW ready
+  let reg;
+  try {
+    reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_,r) => setTimeout(() => r(new Error('timeout')), 5000))]);
+    lines.push(ok('Service Worker: aktiv'));
+  } catch(e) { lines.push(err('Service Worker ready: ' + e.message)); out.textContent = lines.join('\n'); return; }
+
+  // 5 Existing subscription
+  let sub;
+  try {
+    sub = await reg.pushManager.getSubscription();
+    lines.push(sub ? ok('Bestehende Subscription gefunden') : wrn('Keine Subscription – wird jetzt erstellt…'));
+  } catch(e) { lines.push(err('getSubscription: ' + e.message)); }
+
+  // 6 Create subscription
+  if (!sub) {
+    try {
+      const key = Uint8Array.from(atob(VAPID_PUBLIC_KEY.replace(/-/g,'+').replace(/_/g,'/')), c => c.charCodeAt(0));
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      lines.push(ok('Neue Subscription erstellt'));
+    } catch(e) { lines.push(err('subscribe(): ' + e.message)); out.textContent = lines.join('\n'); return; }
+  }
+
+  // 7 Session token
+  const { data: { session } } = await supa.auth.getSession();
+  const token = session?.access_token;
+  if (!token) { lines.push(err('Kein Session-Token – bitte einloggen')); out.textContent = lines.join('\n'); return; }
+  lines.push(ok('Session-Token: vorhanden'));
+
+  // 8 API call
+  try {
+    const res = await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ subscription: sub.toJSON() })
+    });
+    if (res.ok) {
+      lines.push(ok('API /api/push-subscribe: gespeichert ✓'));
+      lines.push('');
+      lines.push('🎉 Alles OK! Gerät ist für Hintergrund-Push registriert.');
+      showToast('📱 Push-Registrierung erfolgreich', 'success');
+    } else {
+      const txt = await res.text();
+      lines.push(err(`API /api/push-subscribe: HTTP ${res.status}`));
+      lines.push('   ' + txt.slice(0, 200));
+    }
+  } catch(e) { lines.push(err('API fetch: ' + e.message)); }
+
+  out.textContent = lines.join('\n');
 }
 
 async function _showNotification(title, body, tag) {
