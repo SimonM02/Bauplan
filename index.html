@@ -2122,7 +2122,7 @@
   <div class="page" id="page-aufgaben">
     <div class="page-header">
       <div><h2>Aufgaben</h2><p>To-Dos und offene Punkte</p></div>
-      <button class="btn btn-primary" onclick="openModal('modal-task')">+ Aufgabe</button>
+      <button class="btn btn-primary" onclick="_populateTaskPersonList();openModal('modal-task')">+ Aufgabe</button>
     </div>
 
     <!-- Stats row -->
@@ -2146,12 +2146,21 @@
     </div>
 
     <!-- Filter tabs -->
-    <div class="chart-tabs" style="margin-bottom:16px">
+    <div class="chart-tabs" style="margin-bottom:12px">
       <button class="chart-tab active" id="task-filter-all"   onclick="setTaskFilter('all',this)">Alle</button>
       <button class="chart-tab"        id="task-filter-open"  onclick="setTaskFilter('open',this)">Offen</button>
       <button class="chart-tab"        id="task-filter-hoch"  onclick="setTaskFilter('hoch',this)">🔴 Hoch</button>
       <button class="chart-tab"        id="task-filter-today" onclick="setTaskFilter('today',this)">📅 Heute fällig</button>
       <button class="chart-tab"        id="task-filter-done"  onclick="setTaskFilter('done',this)">✅ Erledigt</button>
+    </div>
+
+    <!-- Person filter -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:0.8rem;color:var(--text2);white-space:nowrap">👤 Person:</span>
+      <select id="task-person-filter" onchange="setTaskPersonFilter(this.value)"
+        style="font-size:0.82rem;padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;background:white;color:var(--text);cursor:pointer;min-width:160px">
+        <option value="">Alle Personen</option>
+      </select>
     </div>
 
     <!-- Task list -->
@@ -2869,7 +2878,12 @@
       <select id="t-prio"><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select>
     </div>
     <div class="form-row"><label>Fällig am</label><input type="date" id="t-datum"></div>
-    <div class="form-row"><label>Notiz</label><textarea id="t-notiz" placeholder="Details..."></textarea></div>
+    <div class="form-row">
+      <label>Zugewiesen an</label>
+      <input type="text" id="t-person" list="t-person-list" placeholder="Person zuweisen (optional)">
+      <datalist id="t-person-list"></datalist>
+    </div>
+    <div class="form-row"><label>Notiz</label><textarea id="t-notiz" rows="3" placeholder="Details, Hinweise…"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-task');resetTaskModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveTask()">Speichern</button>
@@ -3790,7 +3804,7 @@ function renderDashboard() {
   } else {
     ttbody.innerHTML = openTasks.map(t => `
       <tr>
-        <td>${t.name}</td>
+        <td>${t.name}${t.person?`<br><span style="font-size:0.7rem;color:var(--text3)">👤 ${t.person}</span>`:''}</td>
         <td><span class="badge ${t.prio==='Hoch'?'badge-red':t.prio==='Mittel'?'badge-yellow':'badge-gray'}">${t.prio}</span></td>
         <td><span class="badge badge-blue">${t.status}</span></td>
       </tr>`).join('');
@@ -4839,6 +4853,13 @@ function addTask() {
   renderTasks();
 }
 
+function _populateTaskPersonList() {
+  const dl = document.getElementById('t-person-list');
+  if (!dl) return;
+  const names = state.kontakte.map(k => k.name).filter(Boolean);
+  dl.innerHTML = names.map(n => `<option value="${n}">`).join('');
+}
+
 function saveTask() {
   const editId = parseInt(document.getElementById('t-edit-id').value) || null;
   const name = document.getElementById('t-name').value.trim();
@@ -4848,7 +4869,8 @@ function saveTask() {
     name,
     prio:   document.getElementById('t-prio').value,
     datum:  document.getElementById('t-datum').value || '',
-    notiz:  document.getElementById('t-notiz').value || '',
+    person: document.getElementById('t-person').value.trim() || '',
+    notiz:  document.getElementById('t-notiz').value.trim() || '',
     status: editId ? (state.aufgaben.find(t => t.id === editId)?.status || 'Offen') : 'Offen'
   };
   if (editId) {
@@ -4857,6 +4879,7 @@ function saveTask() {
   } else {
     state.aufgaben.push(item);
   }
+  _syncTaskNotiz(item);
   save();
   closeModal('modal-task');
   resetTaskModal();
@@ -4864,8 +4887,25 @@ function saveTask() {
   showToast(editId ? '✏️ Aufgabe aktualisiert' : '✅ Aufgabe gespeichert', 'success');
 }
 
+function _syncTaskNotiz(task) {
+  const markerKey = '__taskId';
+  const existing = state.notizen.findIndex(n => n[markerKey] === task.id);
+  if (!task.notiz) {
+    if (existing > -1) state.notizen.splice(existing, 1);
+    return;
+  }
+  const noteTitle = `📋 ${task.name}${task.person ? ' · ' + task.person : ''}`;
+  const noteText  = task.notiz + (task.datum ? `\n\nFällig: ${fmtDate(task.datum)}` : '') +
+                    (task.status === 'Erledigt' ? '\n✅ Erledigt' : '');
+  const entry = { id: existing > -1 ? state.notizen[existing].id : Date.now() + Math.random()|0,
+                  title: noteTitle, text: noteText, color: '#eff4ff',
+                  datum: today(), [markerKey]: task.id };
+  if (existing > -1) state.notizen[existing] = entry;
+  else state.notizen.push(entry);
+}
+
 function resetTaskModal() {
-  ['t-name','t-datum','t-notiz'].forEach(id => document.getElementById(id).value = '');
+  ['t-name','t-datum','t-notiz','t-person'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('t-edit-id').value = '';
   document.getElementById('t-modal-title').textContent = 'Aufgabe hinzufügen';
 }
@@ -4873,9 +4913,11 @@ function resetTaskModal() {
 function editTask(id) {
   const t = state.aufgaben.find(t => t.id === id);
   if (!t) return;
-  document.getElementById('t-name').value  = t.name  || '';
-  document.getElementById('t-datum').value = t.datum || '';
-  document.getElementById('t-notiz').value = t.notiz || '';
+  _populateTaskPersonList();
+  document.getElementById('t-name').value   = t.name   || '';
+  document.getElementById('t-datum').value  = t.datum  || '';
+  document.getElementById('t-notiz').value  = t.notiz  || '';
+  document.getElementById('t-person').value = t.person || '';
   const pSel = document.getElementById('t-prio');
   Array.from(pSel.options).forEach(o => { if (o.value === t.prio) o.selected = true; });
   if (document.getElementById('t-edit-id')) document.getElementById('t-edit-id').value = id;
@@ -4885,21 +4927,34 @@ function editTask(id) {
 
 function toggleTask(id) {
   const t = state.aufgaben.find(t => t.id === id);
-  if (t) { t.status = t.status === 'Erledigt' ? 'Offen' : 'Erledigt'; showToast(t.status === 'Erledigt' ? '✅ Aufgabe erledigt' : '↩️ Aufgabe wieder offen', 'success'); }
+  if (t) {
+    t.status = t.status === 'Erledigt' ? 'Offen' : 'Erledigt';
+    _syncTaskNotiz(t);
+    showToast(t.status === 'Erledigt' ? '✅ Aufgabe erledigt' : '↩️ Aufgabe wieder offen', 'success');
+  }
   save(); renderTasks();
 }
 
 function deleteTask(id) {
   if (!confirm('Aufgabe löschen?')) return;
+  // Remove synced notiz
+  state.notizen = state.notizen.filter(n => n.__taskId !== id);
   state.aufgaben = state.aufgaben.filter(t => t.id !== id);
   save(); renderTasks(); showToast('🗑 Aufgabe gelöscht', 'success');
 }
 
 let taskFilter = 'all';
+let taskPersonFilter = '';
+
 function setTaskFilter(f, btn) {
   taskFilter = f;
   document.querySelectorAll('.chart-tab[id^="task-filter"]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  renderTasks();
+}
+
+function setTaskPersonFilter(val) {
+  taskPersonFilter = val;
   renderTasks();
 }
 
@@ -4910,12 +4965,20 @@ function renderTasks() {
   const hCount = open.filter(t => t.prio === 'Hoch').length;
   const mCount = open.filter(t => t.prio === 'Mittel').length;
   const lCount = open.filter(t => t.prio === 'Niedrig').length;
-  document.getElementById('task-count-hoch')?.setAttribute('textContent', hCount) ||
-    (document.getElementById('task-count-hoch') && (document.getElementById('task-count-hoch').textContent = hCount));
   ['task-count-hoch','task-count-mittel','task-count-niedrig','task-count-done'].forEach((id,i) => {
     const el = document.getElementById(id);
     if (el) el.textContent = [hCount, mCount, lCount, done.length][i];
   });
+
+  // Populate person filter dropdown
+  const pSel = document.getElementById('task-person-filter');
+  if (pSel) {
+    const persons = [...new Set(state.aufgaben.map(t => t.person).filter(Boolean))].sort();
+    const cur = pSel.value;
+    pSel.innerHTML = '<option value="">Alle Personen</option>' +
+      persons.map(p => `<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
+    if (!persons.includes(taskPersonFilter)) taskPersonFilter = '';
+  }
 
   const today = new Date(); today.setHours(0,0,0,0);
 
@@ -4929,6 +4992,7 @@ function renderTasks() {
     const d = new Date(t.datum); d.setHours(0,0,0,0);
     return d <= today;
   });
+  if (taskPersonFilter) items = items.filter(t => t.person === taskPersonFilter);
 
   // Sort: high prio first, then by date, done last
   items.sort((a,b) => {
@@ -4983,9 +5047,10 @@ function renderTasks() {
           <span style="font-weight:700;font-size:0.92rem;color:var(--text);${isDone?'text-decoration:line-through;color:var(--text3)':''}">${t.name}</span>
           <span style="display:inline-block;padding:2px 9px;border-radius:99px;font-size:0.68rem;font-weight:700;background:${prioBg[t.prio]};color:${prioColors[t.prio]}">${t.prio}</span>
           ${dueBadge}
+          ${t.person?`<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:0.68rem;font-weight:600;background:#f0f9ff;color:#0369a1">👤 ${t.person}</span>`:''}
           ${isDone?'<span class="badge badge-green" style="font-size:0.65rem">Erledigt</span>':''}
         </div>
-        ${t.notiz?`<div style="font-size:0.8rem;color:var(--text2);margin-top:4px;line-height:1.5">${t.notiz}</div>`:''}
+        ${t.notiz?`<div style="font-size:0.8rem;color:var(--text2);margin-top:6px;padding:8px 10px;background:var(--surface2);border-radius:7px;line-height:1.55;white-space:pre-wrap">${t.notiz}</div>`:''}
       </div>
 
       <!-- Actions -->
@@ -5370,16 +5435,22 @@ function renderNotizen() {
   if (state.notizen.length === 0) {
     el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📎</div><p>Keine Notizen</p></div>`;
   } else {
-    el.innerHTML = [...state.notizen].reverse().map(n => `
-      <div class="card" style="background:${n.color};position:relative">
-        <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px">
-          <button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
-          <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>
+    el.innerHTML = [...state.notizen].reverse().map(n => {
+      const isTask = !!n.__taskId;
+      const actions = isTask
+        ? `<span style="font-size:0.65rem;padding:2px 7px;border-radius:99px;background:#dbeafe;color:#1d4ed8;font-weight:600">Aufgabe</span>`
+        : `<button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
+           <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>`;
+      return `
+      <div class="card" style="background:${n.color||'white'};position:relative">
+        <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px;align-items:center">
+          ${actions}
         </div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}</div>
-        <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:56px;color:var(--text)">${n.title}</div>
+        <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:60px;color:var(--text)">${n.title}</div>
         <div style="font-size:0.82rem;color:var(--text2);line-height:1.55;white-space:pre-wrap">${n.text}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
   renderDokumente();
 }
