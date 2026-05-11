@@ -1,4 +1,5 @@
-const SUPA_URL = 'https://savrxykygruzyngttekl.supabase.co';
+const SUPA_URL  = 'https://savrxykygruzyngttekl.supabase.co';
+const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdnJ4eWt5Z3J1enluZ3R0ZWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MTU4NTEsImV4cCI6MjA2MjI5MTg1MX0.P0Uu2NnSNDVpV1pM5hMHJqASFVjUhp4HJNVqHhI7cyg';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
 
   // Verify token
   const userRes = await fetch(`${SUPA_URL}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: process.env.SUPABASE_ANON_KEY }
+    headers: { Authorization: `Bearer ${token}`, apikey: ANON_KEY }
   });
   const user = await userRes.json();
   if (!userRes.ok || !user.id) return res.status(401).json({ error: 'invalid token' });
