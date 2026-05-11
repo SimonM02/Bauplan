@@ -4888,20 +4888,24 @@ function saveTask() {
 }
 
 function _syncTaskNotiz(task) {
-  const markerKey = '__taskId';
-  const existing = state.notizen.findIndex(n => n[markerKey] === task.id);
+  const existing = state.notizen.find(n => n.__taskId === task.id);
   if (!task.notiz) {
-    if (existing > -1) state.notizen.splice(existing, 1);
+    if (existing) state.notizen = state.notizen.filter(n => n.__taskId !== task.id);
     return;
   }
   const noteTitle = `📋 ${task.name}${task.person ? ' · ' + task.person : ''}`;
-  const noteText  = task.notiz + (task.datum ? `\n\nFällig: ${fmtDate(task.datum)}` : '') +
+  const autoText  = task.notiz + (task.datum ? `\n\nFällig: ${fmtDate(task.datum)}` : '') +
                     (task.status === 'Erledigt' ? '\n✅ Erledigt' : '');
-  const entry = { id: existing > -1 ? state.notizen[existing].id : Date.now() + Math.random()|0,
-                  title: noteTitle, text: noteText, color: '#eff4ff',
-                  datum: today(), [markerKey]: task.id };
-  if (existing > -1) state.notizen[existing] = entry;
-  else state.notizen.push(entry);
+  if (existing) {
+    // Always update title; only overwrite text if user hasn't manually edited it
+    existing.title = noteTitle;
+    existing.datum = today();
+    if (!existing.__userEdited) existing.text = autoText;
+  } else {
+    state.notizen.push({ id: Date.now() + (Math.random() * 999 | 0),
+      title: noteTitle, text: autoText, color: '#eff4ff',
+      datum: today(), __taskId: task.id, __userEdited: false });
+  }
 }
 
 function resetTaskModal() {
@@ -5390,12 +5394,15 @@ function renderDiarySummary() {
 // ──────────────── NOTIZEN ────────────────
 function addNotiz() {
   const editId = parseInt(document.getElementById('n-edit-id')?.value) || null;
+  const prev   = editId ? state.notizen.find(n => n.id === editId) : null;
   const item = {
     id:    editId || Date.now(),
     title: document.getElementById('n-title').value || 'Notiz',
     text:  document.getElementById('n-text').value,
     color: document.getElementById('n-color').value,
-    datum: editId ? (state.notizen.find(n=>n.id===editId)?.datum || today()) : today()
+    datum: prev?.datum || today(),
+    // Preserve task-link; mark as user-edited so _syncTaskNotiz won't overwrite text
+    ...(prev?.__taskId ? { __taskId: prev.__taskId, __userEdited: true } : {})
   };
   if (editId) {
     const idx = state.notizen.findIndex(n => n.id === editId);
@@ -5436,17 +5443,16 @@ function renderNotizen() {
     el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="icon">📎</div><p>Keine Notizen</p></div>`;
   } else {
     el.innerHTML = [...state.notizen].reverse().map(n => {
-      const isTask = !!n.__taskId;
-      const actions = isTask
-        ? `<span style="font-size:0.65rem;padding:2px 7px;border-radius:99px;background:#dbeafe;color:#1d4ed8;font-weight:600">Aufgabe</span>`
-        : `<button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
-           <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>`;
+      const taskBadge = n.__taskId
+        ? `<span style="font-size:0.63rem;padding:2px 7px;border-radius:99px;background:#dbeafe;color:#1d4ed8;font-weight:600;margin-right:4px">📋 Aufgabe</span>`
+        : '';
       return `
       <div class="card" style="background:${n.color||'white'};position:relative">
         <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px;align-items:center">
-          ${actions}
+          <button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
+          <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>
         </div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}${taskBadge ? '&nbsp;&nbsp;' + taskBadge : ''}</div>
         <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:60px;color:var(--text)">${n.title}</div>
         <div style="font-size:0.82rem;color:var(--text2);line-height:1.55;white-space:pre-wrap">${n.text}</div>
       </div>`;
