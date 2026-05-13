@@ -1208,6 +1208,38 @@
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes slideUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: none; } }
 
+  /* Sidebar collapsed (hamburger toggle) */
+  body.sidebar-collapsed .sidebar {
+    width: 0 !important;
+    overflow: hidden !important;
+    border-right: none !important;
+    min-width: 0 !important;
+  }
+  body.sidebar-collapsed #sidebar-show-btn { display: flex !important; }
+
+  #sidebar-show-btn {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 200;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    box-shadow: var(--shadow-md);
+    transition: all 0.15s;
+    color: var(--text2);
+  }
+  #sidebar-show-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sidebar { transition: width 0.22s ease; }
+
   @media (max-width: 700px) {
     .sidebar { width: 62px; }
     .nav-item span, .logo h1, .logo span, .logo-icon + div, .sidebar-footer, .nav-section { display: none; }
@@ -1764,8 +1796,13 @@
 </div>
 
 <!-- SIDEBAR -->
+<button id="sidebar-show-btn" onclick="toggleSidebar()" title="Menü einblenden">☰</button>
 <div class="sidebar">
   <div class="logo" style="cursor:pointer;user-select:none" onclick="openModal('modal-project-switcher')">
+    <button onclick="event.stopPropagation();toggleSidebar()" title="Menü ausblenden"
+      style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:1.1rem;padding:4px 6px;flex-shrink:0;border-radius:7px;transition:all 0.15s;line-height:1;margin-left:-4px"
+      onmouseover="this.style.background='var(--surface2)';this.style.color='var(--accent)'"
+      onmouseout="this.style.background='none';this.style.color='var(--text3)'">☰</button>
     <div class="logo-icon">🏗️</div>
     <div style="flex:1;min-width:0">
       <h1 id="current-project-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Buildora</h1>
@@ -1836,14 +1873,6 @@
     <div class="nav-item" onclick="showPage('kontakte')" data-module="kontakte" data-page="kontakte">
       <span class="icon">👷</span><span>Handwerker</span>
     </div>
-    <div class="nav-item" onclick="showPage('angebote')" data-module="angebote" data-page="angebote">
-      <span class="icon">📄</span><span>Angebote</span>
-    </div>
-    <div class="nav-section" data-module="finanzen2">Finanzen+</div>
-    <div class="nav-item" onclick="showPage('zahlungsplan')" data-module="zahlungsplan" data-page="zahlungsplan">
-      <span class="icon">💳</span><span>Zahlungsplan</span>
-    </div>
-    <div class="nav-section" data-module="qualitaet">Qualität</div>
 
     <div class="nav-section" data-module="gebaeude">Gebäude</div>
     <div class="nav-item" onclick="showPage('dokumentation')" data-module="dokumentation" data-page="dokumentation">
@@ -4539,6 +4568,18 @@ function loadNotificationStatus() {
     if (pushRow) pushRow.style.display = 'none';
   }
 }
+
+function toggleSidebar() {
+  const collapsed = document.body.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+}
+
+// Restore sidebar state on load
+(function() {
+  if (localStorage.getItem('sidebarCollapsed') === '1') {
+    document.body.classList.add('sidebar-collapsed');
+  }
+})();
 
 function togglePrivacy() {
   const on  = document.body.classList.toggle('privacy-mode');
