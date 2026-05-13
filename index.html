@@ -2143,7 +2143,7 @@
         <div style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--text3)" id="bg-kat-count"></div>
       </div>
       <table>
-        <thead><tr><th>Kategorie</th><th>Geplant</th><th>% vom Gesamt</th><th>Ausgegeben</th><th>Rest</th><th>Auslastung</th><th></th></tr></thead>
+        <thead><tr><th style="width:28px"></th><th>Kategorie</th><th>Geplant</th><th>% vom Gesamt</th><th>Ausgegeben</th><th>Rest</th><th>Auslastung</th><th></th></tr></thead>
         <tbody id="budget-table"></tbody>
       </table>
     </div>
@@ -3602,23 +3602,22 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 // ──────────────── SETTINGS ────────────────
 // ──────────────── MODULES ────────────────
 const MODULES = [
-  { id: 'rechnungen',    label: 'Rechnungsübersicht',      icon: '🗂️', group: 'Finanzen',   default: true },
-  { id: 'angebote',      label: 'Angebote',           icon: '📋', group: 'Finanzen',   default: true },
-  { id: 'zahlungsplan',  label: 'Zahlungsplan',        icon: '📅', group: 'Finanzen',   default: true },
-  { id: 'maengel',       label: 'Mängelliste',         icon: '⚠️', group: 'Tagebuch',   default: true },
-  { id: 'kosten',        label: 'Kostenverfolgung',   icon: '💶', group: 'Finanzen',   default: true },
-  { id: 'kostenaufteilung', label: 'Kostenaufteilung', icon: '👥', group: 'Finanzen', default: true },
-  { id: 'kostenchart',   label: 'Kostenentwicklung',  icon: '📈', group: 'Finanzen',   default: true },
-  { id: 'budget',        label: 'Budgetplan',          icon: '📊', group: 'Finanzen',   default: true },
-  { id: 'gantt',         label: 'Gantt-Zeitplan',      icon: '📅', group: 'Planung',    default: true },
-  { id: 'meilensteine',  label: 'Meilensteine',        icon: '🏁', group: 'Planung',    default: true },
-  { id: 'aufgaben',      label: 'Aufgaben',            icon: '✅', group: 'Planung',    default: true },
-  { id: 'fotos',         label: 'Foto-Galerie',        icon: '📸', group: 'Tagebuch',   default: true },
-  { id: 'tagebuch',      label: 'Bautagebuch',         icon: '📓', group: 'Tagebuch',   default: true },
-  { id: 'notizen',       label: 'Notizen',             icon: '📎', group: 'Tagebuch',   default: true },
-  { id: 'kontakte',      label: 'Handwerker',          icon: '👷', group: 'Kontakte',   default: true },
-  { id: 'dokumentation', label: 'Dokumentation',       icon: '📐', group: 'Gebäude',    default: true },
-  { id: 'wartung',       label: 'Wartungsplan',        icon: '🔧', group: 'Gebäude',    default: true },
+  { id: 'kosten',           label: 'Kostenverfolgung',    icon: '💶', group: 'Finanzen',   default: true },
+  { id: 'angebote',         label: 'Angebote',            icon: '📋', group: 'Finanzen',   default: true },
+  { id: 'rechnungen',       label: 'Rechnungsübersicht',  icon: '🗂️', group: 'Finanzen',   default: true },
+  { id: 'zahlungsplan',     label: 'Zahlungsplan',        icon: '📅', group: 'Finanzen',   default: true },
+  { id: 'kostenchart',      label: 'Kostenentwicklung',   icon: '📈', group: 'Finanzen',   default: true },
+  { id: 'kostenaufteilung', label: 'Kostenaufteilung',    icon: '👥', group: 'Finanzen',   default: true },
+  { id: 'budget',           label: 'Budgetplan',          icon: '📊', group: 'Finanzen',   default: true },
+  { id: 'planung',          label: 'Planung',             icon: '📅', group: 'Planung',    default: true },
+  { id: 'aufgaben',         label: 'Aufgaben',            icon: '✅', group: 'Planung',    default: true },
+  { id: 'maengel',          label: 'Mängelliste',         icon: '⚠️', group: 'Tagebuch',   default: true },
+  { id: 'fotos',            label: 'Foto-Galerie',        icon: '📸', group: 'Tagebuch',   default: true },
+  { id: 'tagebuch',         label: 'Bautagebuch',         icon: '📓', group: 'Tagebuch',   default: true },
+  { id: 'notizen',          label: 'Notizen',             icon: '📎', group: 'Tagebuch',   default: true },
+  { id: 'kontakte',         label: 'Handwerker',          icon: '👷', group: 'Kontakte',   default: true },
+  { id: 'dokumentation',    label: 'Dokumentation',       icon: '📐', group: 'Gebäude',    default: true },
+  { id: 'wartung',          label: 'Wartungsplan',        icon: '🔧', group: 'Gebäude',    default: true },
 ];
 
 function getModules() {
@@ -4353,22 +4352,24 @@ function renderBudget() {
     </div>`;
   }).join('');
 
-  // Individual bars
+  // Individual bars (with drag-and-drop handles)
   document.getElementById('budget-bars').innerHTML = state.budgetKat.map((kat, i) => {
     const spent = state.kosten.filter(k => k.kat === kat.name && k.status !== 'Storniert').reduce((s,k) => s + (parseFloat(k.betrag)||0), 0);
     const count = state.kosten.filter(k => k.kat === kat.name && k.status !== 'Storniert').length;
     const pct   = kat.budget > 0 ? Math.min(100, Math.round(spent / kat.budget * 100)) : 0;
     const color = BG_COLORS[i % BG_COLORS.length];
-    return `<div class="budget-bar-row" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}') "
-      style="cursor:pointer;border-radius:8px;padding:4px 6px;margin:-4px -6px;transition:background 0.15s"
-      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+    return `<div class="budget-bar-row" draggable="true"
+      ondragstart="_budgDragStart(event,${i})" ondragover="_budgDragOver(event,${i})" ondrop="_budgDrop(event,${i})" ondragend="_budgDragEnd(event)"
+      style="cursor:pointer;border-radius:8px;padding:4px 6px;margin:-4px -6px;transition:background 0.15s;display:flex;align-items:center;"
+      onmouseover="if(!event.target.closest('[data-drag]'))this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+      <span data-drag="1" title="Verschieben" style="cursor:grab;color:var(--text3);font-size:1rem;padding:0 6px 0 2px;flex-shrink:0;user-select:none" onclick="event.stopPropagation()">⠿</span>
       <div class="budget-bar-label" style="display:flex;align-items:center;gap:6px">
         <span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0"></span>
-        <span>${kat.name}</span>
+        <span onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}') ">${kat.name}</span>
         ${count > 0 ? `<span style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3)">${count}×</span>` : ''}
       </div>
-      <div class="budget-bar-track"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="budget-bar-amount" style="color:${pct>90?'var(--danger)':pct>70?'var(--warning)':'var(--text2)'}">${pct}%</div>
+      <div class="budget-bar-track" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}')"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="budget-bar-amount" style="color:${pct>90?'var(--danger)':pct>70?'var(--warning)':'var(--text2)'}" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}') ">${pct}%</div>
     </div>`;
   }).join('');
 
@@ -4381,8 +4382,11 @@ function renderBudget() {
       const pct     = kat.budget > 0 ? Math.round(spent / kat.budget * 100) : 0;
       const share   = totalBudget > 0 ? (kat.budget / totalBudget * 100).toFixed(1) : 0;
       const color   = BG_COLORS[i % BG_COLORS.length];
-      return `<tr style="cursor:pointer" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}')"
+      return `<tr draggable="true"
+        ondragstart="_budgDragStart(event,${i})" ondragover="_budgDragOver(event,${i})" ondrop="_budgDrop(event,${i})" ondragend="_budgDragEnd(event)"
+        style="cursor:pointer" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}')"
         onmouseover="this.style.background='#f0f5ff'" onmouseout="this.style.background=''">
+        <td onclick="event.stopPropagation()" style="cursor:grab;color:var(--text3);font-size:1rem;text-align:center;user-select:none">⠿</td>
         <td>
           <span style="display:inline-flex;align-items:center;gap:8px;font-weight:700">
             <span style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0;display:inline-block"></span>
@@ -4410,6 +4414,7 @@ function renderBudget() {
     }),
     // Gesamt-Zeile
     `<tr style="background:var(--surface2);font-weight:700;border-top:2px solid var(--border)">
+      <td></td>
       <td style="font-weight:800">∑ Gesamt</td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:800">${fmt(totalBudget)}</td>
       <td><span class="badge badge-blue">100%</span></td>
@@ -4418,6 +4423,40 @@ function renderBudget() {
       <td colspan="2"><span class="badge ${totalPct>90?'badge-red':totalPct>70?'badge-yellow':'badge-green'}">${totalPct}%</span></td>
     </tr>`
   ].join('');
+}
+
+// ──────────────── BUDGET DRAG & DROP ────────────────
+let _budgDragIdx = null;
+
+function _budgDragStart(e, idx) {
+  _budgDragIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => { if (e.target) e.target.style.opacity = '0.4'; }, 0);
+}
+
+function _budgDragOver(e, idx) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  // Highlight drop target
+  const rows = document.querySelectorAll('#budget-bars .budget-bar-row, #budget-table tr[draggable]');
+  rows.forEach((r, i) => r.style.outline = i === idx && _budgDragIdx !== idx ? '2px dashed var(--accent)' : '');
+}
+
+function _budgDragEnd(e) {
+  if (e.target) e.target.style.opacity = '';
+  document.querySelectorAll('#budget-bars .budget-bar-row, #budget-table tr[draggable]').forEach(r => r.style.outline = '');
+  _budgDragIdx = null;
+}
+
+function _budgDrop(e, idx) {
+  e.preventDefault();
+  if (_budgDragIdx === null || _budgDragIdx === idx) return;
+  const arr = [...state.budgetKat];
+  const [moved] = arr.splice(_budgDragIdx, 1);
+  arr.splice(idx, 0, moved);
+  state.budgetKat = arr;
+  save();
+  renderBudget();
 }
 
 // ──────────────── KI RECHNUNGSSCAN ────────────────
