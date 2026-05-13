@@ -39,6 +39,40 @@
     --radius-sm:    7px;
   }
 
+  body.dark-mode {
+    --bg:           #0f1117;
+    --surface:      #1a1d27;
+    --surface2:     #222536;
+    --surface3:     #2a2f42;
+    --border:       #2e3347;
+    --border-strong:#3d4460;
+    --accent:       #4f7cf8;
+    --accent-hover: #3d6ff8;
+    --accent-light: #1a2340;
+    --danger:       #f87171;
+    --danger-light: #2d1a1a;
+    --success:      #4ade80;
+    --success-light:#1a2d20;
+    --warning:      #fbbf24;
+    --warning-light:#2d2310;
+    --text:         #e8eaf0;
+    --text2:        #9ba3b8;
+    --text3:        #545d78;
+    --shadow-sm:    0 1px 2px rgba(0,0,0,0.3);
+    --shadow:       0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md:    0 4px 8px rgba(0,0,0,0.4);
+    --shadow-lg:    0 10px 24px rgba(0,0,0,0.5);
+  }
+  body.dark-mode .logo { background: linear-gradient(135deg, #1a1d27 0%, #222536 100%) !important; }
+  body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
+    background: var(--surface2) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+  }
+  body.dark-mode .modal-box { background: var(--surface) !important; }
+  body.dark-mode .card { background: var(--surface) !important; }
+  body.dark-mode table tr:hover td { background: var(--surface2) !important; }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -2374,6 +2408,22 @@
           </div>
         </div>
 
+        <div class="table-wrap" style="margin-bottom:16px">
+          <div class="table-header"><div class="table-title">Darstellung</div></div>
+          <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+            <div onclick="toggleDarkMode()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px;cursor:pointer;transition:background 0.15s"
+              onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:1rem;width:24px;text-align:center">🌙</span>
+                <span style="font-size:0.875rem;font-weight:600;color:var(--text)">Dunkles Design</span>
+              </div>
+              <div id="dark-mode-toggle" style="width:44px;height:24px;border-radius:99px;background:var(--border);position:relative;transition:background 0.2s;flex-shrink:0">
+                <div id="dark-mode-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:white;transition:left 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.2)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="table-wrap">
           <div class="table-header">
             <div class="table-title">Module ein-/ausblenden</div>
@@ -3710,6 +3760,7 @@ function loadSettings() {
   document.getElementById('s-end').value     = state.settings.end     || '';
   document.getElementById('s-address').value = state.settings.address || '';
   renderModuleToggles();
+  _updateDarkModeToggle(document.body.classList.contains('dark-mode'));
   renderPersonenList();
   refreshBezahltVonSelects();
   loadNotificationStatus();
@@ -4275,7 +4326,7 @@ function addBudgetKat() {
     if (idx > -1) state.budgetKat[idx] = { ...state.budgetKat[idx], name, budget };
   } else {
     if (state.budgetKat.find(k => k.name === name)) { alert(`Kategorie "${name}" existiert bereits.`); return; }
-    state.budgetKat.push({ id: Date.now(), name, budget });
+    state.budgetKat.push({ id: Date.now(), name, budget, color: BG_COLORS[state.budgetKat.length % BG_COLORS.length] });
   }
   save(); closeModal('modal-budget-kat');
   document.getElementById('bk-name').value   = '';
@@ -4341,13 +4392,13 @@ function renderBudget() {
   const legend = document.getElementById('bg-legend');
   segBar.innerHTML = state.budgetKat.map((kat, i) => {
     const pct = totalBudget > 0 ? (kat.budget / totalBudget * 100).toFixed(1) : 0;
-    return `<div style="width:${pct}%;background:${BG_COLORS[i % BG_COLORS.length]};min-width:${pct>0?'4px':'0'};transition:width 0.4s" title="${kat.name}: ${fmt(kat.budget)} (${pct}%)"></div>`;
+    return `<div style="width:${pct}%;background:${kat.color || BG_COLORS[i % BG_COLORS.length]};min-width:${pct>0?'4px':'0'};transition:width 0.4s" title="${kat.name}: ${fmt(kat.budget)} (${pct}%)"></div>`;
   }).join('');
 
   legend.innerHTML = state.budgetKat.map((kat, i) => {
     const pct = totalBudget > 0 ? (kat.budget / totalBudget * 100).toFixed(0) : 0;
     return `<div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text2);font-weight:600">
-      <span style="width:10px;height:10px;border-radius:3px;background:${BG_COLORS[i % BG_COLORS.length]};flex-shrink:0;display:inline-block"></span>
+      <span style="width:10px;height:10px;border-radius:3px;background:${kat.color || BG_COLORS[i % BG_COLORS.length]};flex-shrink:0;display:inline-block"></span>
       ${kat.name} <span style="color:var(--text3);font-weight:400">${pct}%</span>
     </div>`;
   }).join('');
@@ -4357,7 +4408,7 @@ function renderBudget() {
     const spent = state.kosten.filter(k => k.kat === kat.name && k.status !== 'Storniert').reduce((s,k) => s + (parseFloat(k.betrag)||0), 0);
     const count = state.kosten.filter(k => k.kat === kat.name && k.status !== 'Storniert').length;
     const pct   = kat.budget > 0 ? Math.min(100, Math.round(spent / kat.budget * 100)) : 0;
-    const color = BG_COLORS[i % BG_COLORS.length];
+    const color = kat.color || BG_COLORS[i % BG_COLORS.length];
     return `<div class="budget-bar-row" draggable="true"
       ondragstart="_budgDragStart(event,${i})" ondragover="_budgDragOver(event,${i})" ondrop="_budgDrop(event,${i})" ondragend="_budgDragEnd(event)"
       style="cursor:pointer;border-radius:8px;padding:4px 6px;margin:-4px -6px;transition:background 0.15s;display:flex;align-items:center;"
@@ -4381,7 +4432,7 @@ function renderBudget() {
       const rest    = kat.budget - spent;
       const pct     = kat.budget > 0 ? Math.round(spent / kat.budget * 100) : 0;
       const share   = totalBudget > 0 ? (kat.budget / totalBudget * 100).toFixed(1) : 0;
-      const color   = BG_COLORS[i % BG_COLORS.length];
+      const color   = kat.color || BG_COLORS[i % BG_COLORS.length];
       return `<tr draggable="true"
         ondragstart="_budgDragStart(event,${i})" ondragover="_budgDragOver(event,${i})" ondrop="_budgDrop(event,${i})" ondragend="_budgDragEnd(event)"
         style="cursor:pointer" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}')"
@@ -4613,10 +4664,26 @@ function toggleSidebar() {
   localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
 }
 
+function toggleDarkMode() {
+  const on = document.body.classList.toggle('dark-mode');
+  localStorage.setItem('darkMode', on ? '1' : '0');
+  _updateDarkModeToggle(on);
+}
+
+function _updateDarkModeToggle(on) {
+  const tog = document.getElementById('dark-mode-toggle');
+  const knob = document.getElementById('dark-mode-knob');
+  if (tog) tog.style.background = on ? 'var(--accent)' : 'var(--border)';
+  if (knob) knob.style.left = on ? '23px' : '3px';
+}
+
 // Restore sidebar state on load
 (function() {
   if (localStorage.getItem('sidebarCollapsed') === '1') {
     document.body.classList.add('sidebar-collapsed');
+  }
+  if (localStorage.getItem('darkMode') === '1') {
+    document.body.classList.add('dark-mode');
   }
 })();
 
