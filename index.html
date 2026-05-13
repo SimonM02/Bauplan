@@ -1274,13 +1274,78 @@
 
   .sidebar { transition: width 0.22s ease; }
 
-  @media (max-width: 700px) {
-    .sidebar { width: 62px; }
-    .nav-item span, .logo h1, .logo span, .logo-icon + div, .sidebar-footer, .nav-section { display: none; }
-    .logo { justify-content: center; padding: 16px 0; }
-    .main { padding: 20px 16px; }
-    .two-col { grid-template-columns: 1fr; }
-    .cards-grid { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 768px) {
+    /* Sidebar becomes a slide-in overlay */
+    .sidebar {
+      position: fixed !important;
+      left: -280px;
+      top: 0;
+      width: 280px !important;
+      height: 100vh;
+      z-index: 500;
+      transition: left 0.28s cubic-bezier(.4,0,.2,1);
+      box-shadow: none;
+      overflow-y: auto;
+    }
+    .sidebar.mobile-open {
+      left: 0 !important;
+      box-shadow: 4px 0 32px rgba(0,0,0,0.18);
+    }
+    /* Backdrop */
+    #mobile-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 499;
+    }
+    #mobile-backdrop.visible { display: block; }
+    /* Mobile top bar */
+    #mobile-topbar {
+      display: flex !important;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      z-index: 400;
+      box-shadow: var(--shadow-sm);
+    }
+    #mobile-topbar-title {
+      flex: 1;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .main {
+      padding: 72px 14px 24px !important;
+      width: 100% !important;
+    }
+    /* Hide the floating sidebar-show btn on mobile (topbar handles it) */
+    #sidebar-show-btn { display: none !important; }
+    /* Don't collapse via body class on mobile */
+    body.sidebar-collapsed .sidebar { width: 280px !important; left: -280px; overflow: hidden !important; }
+
+    /* Better card grid on mobile */
+    .cards-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+    .two-col { grid-template-columns: 1fr !important; }
+
+    /* Better table scrolling */
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 500px; }
+
+    /* Larger touch targets */
+    .btn { min-height: 40px; }
+    .nav-item { padding: 11px 14px !important; font-size: 0.92rem !important; }
+
+    /* iOS safe area */
+    .main { padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important; }
   }
 
   /* DIARY */
@@ -1830,6 +1895,12 @@
 </div>
 
 <!-- SIDEBAR -->
+<div id="mobile-backdrop" onclick="closeMobileSidebar()"></div>
+<div id="mobile-topbar" style="display:none">
+  <button onclick="toggleMobileSidebar()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text2);padding:4px;flex-shrink:0;line-height:1">☰</button>
+  <span id="mobile-topbar-title">Buildora</span>
+  <button onclick="refreshApp()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text3);padding:4px;flex-shrink:0;line-height:1" title="Aktualisieren">🔄</button>
+</div>
 <button id="sidebar-show-btn" onclick="toggleSidebar()" title="Menü einblenden">☰</button>
 <div class="sidebar">
   <div class="logo" style="cursor:pointer;user-select:none" onclick="openModal('modal-project-switcher')">
@@ -3509,6 +3580,8 @@ function updateProjectHeader() {
   document.documentElement.style.setProperty('--accent2', color + 'cc');
   document.documentElement.style.setProperty('--accent-light', color + '18');
   document.documentElement.style.setProperty('--accent-grad', `linear-gradient(135deg, ${color}, ${color}cc)`);
+  const mobileTitle = document.getElementById('mobile-topbar-title');
+  if (mobileTitle) mobileTitle.textContent = document.getElementById('current-project-name')?.textContent || 'Buildora';
 }
 
 // ──────────────── EINMAL-HINWEISE ────────────────
@@ -3578,6 +3651,7 @@ function showPlanTab(tab, btn) {
 }
 
 function showPage(id) {
+  if (window.innerWidth <= 768) closeMobileSidebar();
   // Redirect legacy planning page IDs to unified page
   const planTabMap = { gantt: 'zeitplan', meilensteine: 'meilensteine', abhaengigkeiten: 'ablauf' };
   const planTab = planTabMap[id];
@@ -4664,10 +4738,41 @@ function toggleSidebar() {
   localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
 }
 
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('mobile-backdrop');
+  const isOpen = sidebar.classList.toggle('mobile-open');
+  backdrop.classList.toggle('visible', isOpen);
+}
+
+function closeMobileSidebar() {
+  document.querySelector('.sidebar')?.classList.remove('mobile-open');
+  document.getElementById('mobile-backdrop')?.classList.remove('visible');
+}
+
 function toggleDarkMode() {
   const on = document.body.classList.toggle('dark-mode');
   localStorage.setItem('darkMode', on ? '1' : '0');
   _updateDarkModeToggle(on);
+}
+
+function showDsgvoIfNeeded() {
+  if (!localStorage.getItem('dsgvoAccepted')) {
+    const m = document.getElementById('modal-dsgvo');
+    if (m) m.style.display = 'flex';
+  }
+}
+
+function acceptDsgvo() {
+  const check = document.getElementById('dsgvo-check');
+  if (!check?.checked) {
+    check?.parentElement?.animate([{outline:'2px solid red'},{outline:'none'}],{duration:800});
+    alert('Bitte bestätige die Datenschutzinformation.');
+    return;
+  }
+  localStorage.setItem('dsgvoAccepted', '1');
+  const m = document.getElementById('modal-dsgvo');
+  if (m) m.style.display = 'none';
 }
 
 function _updateDarkModeToggle(on) {
@@ -7713,6 +7818,7 @@ async function onAuthSuccess(user, isNewUser = false) {
   } else {
     applyModuleVisibility();
     renderDashboard();
+    showDsgvoIfNeeded();
     setTimeout(requestNotifications, 1500);
   }
 }
@@ -9761,5 +9867,39 @@ function exportRechnungenPDF() {
   showToast('📄 Rechnungsübersicht als PDF gespeichert', 'success');
 }
 </script>
+
+<!-- DSGVO Consent Modal -->
+<div id="modal-dsgvo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border-radius:16px;max-width:480px;width:100%;padding:32px;box-shadow:var(--shadow-lg);max-height:90vh;overflow-y:auto">
+    <div style="font-size:1.5rem;margin-bottom:8px">🏗️</div>
+    <h2 style="font-size:1.2rem;font-weight:800;color:var(--text);margin-bottom:8px">Willkommen bei Buildora</h2>
+    <p style="font-size:0.85rem;color:var(--text2);margin-bottom:20px;line-height:1.6">
+      Bevor du loslegst, informieren wir dich kurz über die Verarbeitung deiner Daten gemäß <strong>DSGVO</strong>.
+    </p>
+    <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;font-size:0.82rem;color:var(--text2);line-height:1.7">
+      <div style="margin-bottom:8px"><strong style="color:var(--text)">📋 Welche Daten werden gespeichert?</strong></div>
+      <ul style="padding-left:18px;margin-bottom:12px">
+        <li>E-Mail-Adresse (für Login &amp; Konto)</li>
+        <li>Projektdaten (Kosten, Aufgaben, Notizen, Fotos)</li>
+        <li>Gerätedaten für Push-Benachrichtigungen (optional)</li>
+      </ul>
+      <div style="margin-bottom:8px"><strong style="color:var(--text)">🔒 Wo werden die Daten gespeichert?</strong></div>
+      <p style="margin-bottom:12px">Deine Daten werden verschlüsselt in der EU auf Servern von <strong>Supabase</strong> (DSGVO-konform) gespeichert. Es erfolgt keine Weitergabe an Dritte.</p>
+      <div style="margin-bottom:8px"><strong style="color:var(--text)">✅ Deine Rechte</strong></div>
+      <p>Du kannst dein Konto und alle Daten jederzeit unter <em>Einstellungen → Konto → Konto löschen</em> vollständig löschen.</p>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:20px;padding:12px;background:var(--accent-light);border-radius:8px;cursor:pointer" onclick="document.getElementById('dsgvo-check').click()">
+      <input type="checkbox" id="dsgvo-check" style="width:18px;height:18px;flex-shrink:0;margin-top:1px;cursor:pointer">
+      <label for="dsgvo-check" style="font-size:0.82rem;color:var(--text2);cursor:pointer;line-height:1.55">
+        Ich habe die Datenschutzinformation gelesen und stimme der Verarbeitung meiner Daten gemäß der obigen Beschreibung zu.
+      </label>
+    </div>
+    <button onclick="acceptDsgvo()" id="dsgvo-accept-btn"
+      style="width:100%;background:var(--accent);color:white;border:none;border-radius:10px;padding:13px;font-family:'Inter',sans-serif;font-size:0.92rem;font-weight:700;cursor:pointer;transition:background 0.15s"
+      onmouseover="this.style.background='var(--accent-hover)'" onmouseout="this.style.background='var(--accent)'">
+      Zustimmen &amp; Buildora öffnen
+    </button>
+  </div>
+</div>
 </body>
 </html>
