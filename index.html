@@ -62,16 +62,99 @@
     --shadow:       0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
     --shadow-md:    0 4px 8px rgba(0,0,0,0.4);
     --shadow-lg:    0 10px 24px rgba(0,0,0,0.5);
+    color-scheme: dark;
   }
-  body.dark-mode .logo { background: linear-gradient(135deg, #1a1d27 0%, #222536 100%) !important; }
-  body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
-    background: var(--surface2) !important;
-    color: var(--text) !important;
-    border-color: var(--border) !important;
-  }
-  body.dark-mode .modal-box { background: var(--surface) !important; }
-  body.dark-mode .card { background: var(--surface) !important; }
+  /* ── Dark mode overrides ── */
+  body.dark-mode { background: var(--bg) !important; color: var(--text) !important; }
+
+  /* Layout */
+  body.dark-mode .sidebar,
+  body.dark-mode #mobile-topbar    { background: var(--surface) !important; border-color: var(--border) !important; }
+  body.dark-mode .logo             { background: linear-gradient(135deg,#1a1d27,#222536) !important; }
+  body.dark-mode .main             { background: var(--bg) !important; }
+
+  /* Cards & surfaces */
+  body.dark-mode .card,
+  body.dark-mode .table-wrap,
+  body.dark-mode .budget-visual,
+  body.dark-mode .chart-container  { background: var(--surface) !important; border-color: var(--border) !important; }
+  body.dark-mode .page-header      { background: transparent !important; }
+
+  /* Buttons */
+  body.dark-mode .btn-ghost        { background: var(--surface2) !important; color: var(--text2) !important; border-color: var(--border) !important; }
+  body.dark-mode .btn-ghost:hover  { background: var(--surface3) !important; color: var(--text) !important; }
+
+  /* Forms */
+  body.dark-mode input:not([type=checkbox]):not([type=radio]):not([type=range]),
+  body.dark-mode select,
+  body.dark-mode textarea          { background: var(--surface2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+  body.dark-mode input::placeholder,
+  body.dark-mode textarea::placeholder { color: var(--text3) !important; }
+  body.dark-mode .form-row select option { background: var(--surface2) !important; color: var(--text) !important; }
+  body.dark-mode .photo-upload-area { background: var(--surface2) !important; }
+
+  /* Modals */
+  body.dark-mode .modal-overlay    { background: rgba(0,0,0,0.6) !important; }
+  body.dark-mode .modal,
+  body.dark-mode .modal-box        { background: var(--surface) !important; border-color: var(--border) !important; }
+
+  /* Tables */
+  body.dark-mode table thead tr    { background: linear-gradient(to right, var(--surface2), var(--surface3)) !important; }
+  body.dark-mode table thead th    { color: var(--text2) !important; border-color: var(--border) !important; }
+  body.dark-mode table tbody td    { border-color: var(--border) !important; color: var(--text) !important; }
+  body.dark-mode tr:hover td,
   body.dark-mode table tr:hover td { background: var(--surface2) !important; }
+
+  /* Nav */
+  body.dark-mode .nav-item         { color: var(--text2) !important; }
+  body.dark-mode .nav-item:hover   { background: var(--surface2) !important; color: var(--text) !important; }
+  body.dark-mode .nav-item.active  { background: var(--accent-light) !important; color: var(--accent) !important; }
+  body.dark-mode .nav-section      { color: var(--text3) !important; }
+
+  /* Badges */
+  body.dark-mode .badge-gray       { background: var(--surface3) !important; color: var(--text2) !important; }
+  body.dark-mode .badge-green      { background: #1a2d20 !important; color: #4ade80 !important; }
+  body.dark-mode .badge-red        { background: #2d1a1a !important; color: #f87171 !important; }
+  body.dark-mode .badge-yellow     { background: #2d2310 !important; color: #fbbf24 !important; }
+  body.dark-mode .badge-blue       { background: #1a2340 !important; color: #4f7cf8 !important; }
+  body.dark-mode .badge-purple     { background: #251a40 !important; color: #a78bfa !important; }
+  body.dark-mode .badge-teal       { background: #0f2420 !important; color: #2dd4bf !important; }
+  body.dark-mode .badge-orange     { background: #2d1e0a !important; color: #fb923c !important; }
+
+  /* Chart tabs */
+  body.dark-mode .chart-tab        { background: var(--surface2) !important; color: var(--text2) !important; border-color: var(--border) !important; }
+  body.dark-mode .chart-tab.active { background: var(--accent) !important; color: white !important; }
+
+  /* Milestones / checkboxes */
+  body.dark-mode .milestone-check  { background: var(--surface2) !important; border-color: var(--border) !important; }
+
+  /* Action buttons */
+  body.dark-mode .action-btn       { background: var(--surface2) !important; color: var(--text2) !important; border-color: var(--border) !important; }
+  body.dark-mode .action-btn:hover { background: var(--surface3) !important; color: var(--text) !important; }
+
+  /* Gantt */
+  body.dark-mode .gantt-row        { border-color: var(--border) !important; }
+  body.dark-mode .gantt-row:hover  { background: var(--surface2) !important; }
+
+  /* Diary entries */
+  body.dark-mode .diary-entry      { background: var(--surface) !important; border-color: var(--border) !important; }
+
+  /* Sidebar footer & settings buttons */
+  body.dark-mode .sidebar-footer   { border-color: var(--border) !important; color: var(--text3) !important; }
+
+  /* KI-Panel */
+  body.dark-mode #ki-advisor-panel { border-color: var(--border) !important; background: var(--surface) !important; }
+
+  /* Onboarding / info boxes */
+  body.dark-mode [style*="background:#f0f5ff"],
+  body.dark-mode [style*="background: #f0f5ff"],
+  body.dark-mode [style*="background:var(--accent-light)"] { background: var(--accent-light) !important; }
+
+  /* Headings & text */
+  body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
+  body.dark-mode .card-value, body.dark-mode .card-label,
+  body.dark-mode .table-title      { color: var(--text) !important; }
+  body.dark-mode .card-sub         { color: var(--text3) !important; }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
