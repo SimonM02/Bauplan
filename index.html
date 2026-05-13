@@ -2503,6 +2503,66 @@
             </div>
           </div>
 
+          <div class="table-header" style="border-top:1px solid var(--border)"><div class="table-title">⭐ Mein Plan</div></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
+
+            <!-- Free plan card -->
+            <div id="plan-free-card" style="display:none;border-radius:12px;border:1.5px solid var(--border);overflow:hidden">
+              <div style="padding:16px 18px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div>
+                  <div style="font-weight:700;font-size:0.92rem;color:var(--text);margin-bottom:3px">Kostenlos</div>
+                  <div style="font-size:0.78rem;color:var(--text3)">Grundfunktionen inklusive</div>
+                </div>
+                <span style="background:#e2e8f0;color:#475569;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap">GRATIS</span>
+              </div>
+              <div style="padding:14px 18px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:0.8rem;color:var(--text2);line-height:1.6">
+                  ✅ Kostenverfolgung &amp; Budget<br>
+                  ✅ Planung &amp; To-do-Listen<br>
+                  ✅ Notizen &amp; Dokumente<br>
+                  🔒 KI-Bauberater (Pro)<br>
+                  🔒 Unbegrenzte Projekte (Pro)
+                </div>
+                <button onclick="startStripeCheckout()"
+                  style="width:100%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;border-radius:9px;padding:11px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;color:white;cursor:pointer;transition:opacity 0.15s"
+                  onmouseover="this.style.opacity='0.88'" onmouseout="this.style.opacity='1'">
+                  ⭐ Jetzt auf Pro upgraden
+                </button>
+              </div>
+            </div>
+
+            <!-- Pro plan card -->
+            <div id="plan-pro-card" style="display:none;border-radius:12px;border:2px solid var(--accent);overflow:hidden">
+              <div style="padding:16px 18px;background:linear-gradient(135deg,#ede9fe,#dbeafe);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div>
+                  <div style="font-weight:700;font-size:0.92rem;color:#1e1b4b;margin-bottom:3px">Pro-Mitglied ⭐</div>
+                  <div style="font-size:0.78rem;color:#4338ca">Alle Funktionen freigeschaltet</div>
+                </div>
+                <span style="background:var(--accent);color:white;font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap">PRO AKTIV</span>
+              </div>
+              <div style="padding:14px 18px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:0.8rem;color:var(--text2);line-height:1.6">
+                  ✅ Alle Funktionen inklusive KI-Bauberater<br>
+                  ✅ Unbegrenzte Projekte<br>
+                  ✅ Prioritäts-Support<br>
+                  <span id="plan-period-end" style="font-size:0.75rem;color:var(--text3)"></span>
+                </div>
+                <button onclick="openStripePortal()"
+                  style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:10px;font-family:'Inter',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text2);cursor:pointer;transition:all 0.15s"
+                  onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                  onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+                  ⚙️ Abo verwalten / kündigen
+                </button>
+              </div>
+            </div>
+
+            <!-- Loading state -->
+            <div id="plan-loading-card" style="padding:16px 18px;background:var(--surface2);border-radius:12px;border:1.5px solid var(--border);font-size:0.82rem;color:var(--text3)">
+              Plan wird geladen…
+            </div>
+
+          </div>
+
           <div class="table-header" style="border-top:1px solid var(--border)"><div class="table-title">Mein Konto</div></div>
           <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:10px">
@@ -3759,7 +3819,7 @@ function showPage(id) {
   if (id === 'kostenaufteilung') renderKostenaufteilung();
   if (id === 'dokumentation') renderDoku();
   if (id === 'wartung') renderWartung();
-  if (id === 'settings') loadSettings();
+  if (id === 'settings') { loadSettings(); loadUserPlan(); }
   showPageHint(id);
 }
 
@@ -3927,6 +3987,106 @@ function loadSettings() {
     if (avatarEl) avatarEl.textContent = email.charAt(0).toUpperCase() || '?';
   }
 }
+
+// ── Stripe / Plan ──────────────────────────────────────────────────────────
+async function loadUserPlan() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supa
+      .from('subscriptions')
+      .select('plan, status, current_period_end')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    const loadingEl = document.getElementById('plan-loading-card');
+    const freeEl    = document.getElementById('plan-free-card');
+    const proEl     = document.getElementById('plan-pro-card');
+    if (!loadingEl || !freeEl || !proEl) return;
+
+    loadingEl.style.display = 'none';
+    const isPro = data && data.plan === 'pro' && ['active','trialing'].includes(data.status);
+
+    if (isPro) {
+      proEl.style.display = 'block';
+      const periodEl = document.getElementById('plan-period-end');
+      if (periodEl && data.current_period_end) {
+        const d = new Date(data.current_period_end);
+        periodEl.textContent = 'Nächste Verlängerung: ' + d.toLocaleDateString('de-AT');
+      }
+      // Store plan in state for feature gating
+      window._userPlan = 'pro';
+    } else {
+      freeEl.style.display = 'block';
+      window._userPlan = 'free';
+    }
+  } catch(e) {
+    // Silently show free card if subscriptions table doesn't exist yet
+    const loadingEl = document.getElementById('plan-loading-card');
+    const freeEl    = document.getElementById('plan-free-card');
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (freeEl)    freeEl.style.display    = 'block';
+    window._userPlan = 'free';
+  }
+}
+
+async function startStripeCheckout() {
+  if (!currentUser) return;
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Weiterleitung…'; }
+  try {
+    const { data: { session } } = await supa.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('not logged in');
+    const res = await fetch('/api/stripe-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }
+    });
+    const json = await res.json();
+    if (json.url) {
+      window.location.href = json.url;
+    } else {
+      throw new Error(json.error || 'Fehler');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '⭐ Jetzt auf Pro upgraden'; }
+    showToast('Fehler: ' + e.message, true);
+  }
+}
+
+async function openStripePortal() {
+  if (!currentUser) return;
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Weiterleitung…'; }
+  try {
+    const { data: { session } } = await supa.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('not logged in');
+    const res = await fetch('/api/stripe-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }
+    });
+    const json = await res.json();
+    if (json.url) {
+      window.location.href = json.url;
+    } else {
+      throw new Error(json.error || 'Fehler');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '⚙️ Abo verwalten / kündigen'; }
+    showToast('Fehler: ' + e.message, true);
+  }
+}
+
+// Check ?upgrade=success in URL
+(function checkUpgradeParam() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('upgrade') === 'success') {
+    history.replaceState({}, '', window.location.pathname);
+    // Wait for UI to be ready then show toast
+    setTimeout(() => showToast('🎉 Pro-Abo aktiviert! Willkommen an Bord.'), 1200);
+  }
+})();
+// ── End Stripe / Plan ───────────────────────────────────────────────────────
 
 async function doLogout() {
   if (!confirm('Wirklich abmelden? Deine Daten werden vorher gespeichert.')) return;
@@ -7902,6 +8062,8 @@ async function onAuthSuccess(user, isNewUser = false) {
     showDsgvoIfNeeded();
     setTimeout(requestNotifications, 1500);
   }
+  // Load subscription plan (non-blocking)
+  loadUserPlan();
 }
 
 // ── CLOUD SYNC ──────────────────────────────────
