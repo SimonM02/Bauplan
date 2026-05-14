@@ -6098,22 +6098,22 @@ function _pickDateiKat() {
 }
 
 async function uploadDokument(input) {
+  if (!currentUser) { showToast('Bitte zuerst anmelden', 'error'); return; }
   const files = Array.from(input.files);
   if (!files.length) return;
 
-  // PDFs/Docs: max 10 MB; images get auto-compressed so no hard limit
-  const tooBig = files.filter(f => !f.type.startsWith('image/') && f.size > 10 * 1024 * 1024);
+  // No hard size limit – images are compressed, docs up to 50 MB
+  const tooBig = files.filter(f => f.size > 50 * 1024 * 1024);
   if (tooBig.length) {
-    showToast(`⚠️ ${tooBig[0].name} ist zu groß (max. 10 MB für Dokumente)`, 'error');
+    showToast(`⚠️ ${tooBig[0].name} ist zu groß (max. 50 MB)`, 'error');
     input.value = ''; return;
   }
 
   // Pick category via modal
   let katName;
   try { katName = await _pickDateiKat(); }
-  catch { input.value = ''; return; } // cancelled
+  catch { input.value = ''; return; }
 
-  // Show progress bar
   const prog  = document.getElementById('dokument-upload-progress');
   const bar   = document.getElementById('dokument-upload-bar');
   const pct   = document.getElementById('dokument-upload-pct');
@@ -6123,80 +6123,95 @@ async function uploadDokument(input) {
   if (btn)  { btn.disabled = true; btn.textContent = '⏳ Lädt…'; }
 
   state.dateien = state.dateien || [];
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const isImage = file.type.startsWith('image/');
-    if (label) label.textContent = isImage
-      ? `🖼 ${file.name} wird komprimiert…`
-      : `📄 ${file.name} wird geladen…`;
-    if (bar) bar.style.width = Math.round((i / files.length) * 100) + '%';
-    if (pct) pct.textContent  = Math.round((i / files.length) * 100) + '%';
+  let uploaded = 0;
 
-    let data, storedSize;
-    if (isImage) {
-      // Auto-compress: max 1600px, 80% quality – keeps images small enough for localStorage
-      const compressed = await compressImage(file, 1600, 0.80);
-      storedSize = compressed.size;
-      data = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result); r.onerror = rej;
-        r.readAsDataURL(compressed);
-      });
-    } else {
-      storedSize = file.size;
-      data = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onprogress = e => {
-          if (e.lengthComputable && bar && pct) {
-            const fp = Math.round((i / files.length + e.loaded / e.total / files.length) * 100);
-            bar.style.width = fp + '%'; pct.textContent = fp + '%';
-          }
-        };
-        r.onload = e => res(e.target.result); r.onerror = rej;
-        r.readAsDataURL(file);
-      });
+  for (let i = 0; i < files.length; i++) {
+    let file = files[i];
+    const isImage = file.type.startsWith('image/');
+    if (label) label.textContent = isImage ? `🖼 ${file.name} wird komprimiert…` : `📄 ${file.name} wird hochgeladen…`;
+    if (bar) bar.style.width = Math.round((i / files.length) * 90) + '%';
+    if (pct) pct.textContent  = Math.round((i / files.length) * 90) + '%';
+
+    // Compress images before upload
+    if (isImage) file = await compressImage(file, 1600, 0.82);
+
+    // Upload to Supabase Storage
+    const ext      = files[i].name.split('.').pop();
+    const safeName = files[i].name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path     = `${currentUser.id}/${Date.now()}_${safeName}`;
+
+    const { error: upErr } = await supa.storage.from('dokumente').upload(path, file, {
+      contentType: file.type, upsert: false
+    });
+    if (upErr) {
+      showToast(`⚠️ ${files[i].name}: ${upErr.message}`, 'error');
+      continue;
     }
-    state.dateien.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: storedSize, kat: katName, datum: today(), data });
+
+    state.dateien.push({
+      id:      Date.now() + Math.random(),
+      name:    files[i].name,
+      type:    files[i].type,
+      size:    file.size,
+      kat:     katName,
+      datum:   today(),
+      storage: path          // ← store path, NOT base64
+    });
+    uploaded++;
   }
 
   if (bar) bar.style.width = '100%';
   if (pct) pct.textContent = '100%';
-  await new Promise(r => setTimeout(r, 400));
+  await new Promise(r => setTimeout(r, 350));
   if (prog) prog.style.display = 'none';
   if (bar)  bar.style.width = '0%';
   if (btn)  { btn.disabled = false; btn.textContent = '📎 Dokument'; }
 
-  save(); input.value = '';
-  renderDokumente();
-  showToast(`📎 ${files.length > 1 ? files.length + ' Dokumente' : 'Dokument'} gespeichert`, 'success');
+  if (uploaded > 0) {
+    save(); renderDokumente();
+    showToast(`📎 ${uploaded > 1 ? uploaded + ' Dokumente' : 'Dokument'} gespeichert`, 'success');
+  }
+  input.value = '';
 }
 
-function downloadDokument(id) {
+async function _getDokumentUrl(d) {
+  // Support both old base64 entries and new storage-path entries
+  if (d.storage) {
+    const { data } = await supa.storage.from('dokumente').createSignedUrl(d.storage, 3600);
+    return data?.signedUrl || null;
+  }
+  return d.data || null; // legacy base64
+}
+
+async function downloadDokument(id) {
   const d = (state.dateien||[]).find(d => d.id === id);
   if (!d) return;
+  const url = await _getDokumentUrl(d);
+  if (!url) return;
   const a = document.createElement('a');
-  a.href = d.data; a.download = d.name; a.click();
+  a.href = url; a.download = d.name; a.target = '_blank'; a.click();
 }
 
-function openDokument(id) {
+async function openDokument(id) {
   const d = (state.dateien||[]).find(d => d.id === id);
   if (!d) return;
-  // PDFs and images can be opened inline in the browser
-  const viewable = ['application/pdf','image/jpeg','image/jpg','image/png','image/gif','image/webp'];
-  if (viewable.includes(d.type) || d.type?.startsWith('image/')) {
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(`<html><head><title>${d.name}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}img{max-width:100%;max-height:100vh}iframe{width:100vw;height:100vh;border:none}</style></head><body>${d.type==='application/pdf'?`<iframe src="${d.data}"></iframe>`:`<img src="${d.data}" alt="${d.name}">`}</body></html>`);
-      win.document.close();
-    }
+  const url = await _getDokumentUrl(d);
+  if (!url) { showToast('Datei konnte nicht geladen werden', 'error'); return; }
+  const viewable = d.type === 'application/pdf' || d.type?.startsWith('image/');
+  if (viewable) {
+    window.open(url, '_blank');
   } else {
-    // For other file types, fall back to download
-    downloadDokument(id);
+    const a = document.createElement('a');
+    a.href = url; a.download = d.name; a.target = '_blank'; a.click();
   }
 }
 
-function deleteDokument(id) {
+async function deleteDokument(id) {
   if (!confirm('Dokument löschen?')) return;
+  const d = (state.dateien||[]).find(d => d.id === id);
+  if (d?.storage) {
+    await supa.storage.from('dokumente').remove([d.storage]);
+  }
   state.dateien = (state.dateien||[]).filter(d => d.id !== id);
   save(); renderDokumente();
   showToast('🗑 Dokument gelöscht', 'success');
