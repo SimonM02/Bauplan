@@ -5384,10 +5384,7 @@ function addTask() {
 function _populateTaskPersonList() {
   const dl = document.getElementById('t-person-list');
   if (!dl) return;
-  const fromKontakte    = (state.kontakte||[]).map(k => k.name);
-  const fromZahlungen   = (state.zahlungspersonen||[]).map(p => p.name);
-  const fromAufgaben    = (state.aufgaben||[]).map(t => t.person).filter(Boolean);
-  const names = [...new Set([...fromZahlungen, ...fromKontakte, ...fromAufgaben].filter(Boolean))];
+  const names = [...new Set((state.aufgaben||[]).map(t => t.person).filter(Boolean))];
   dl.innerHTML = names.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
   // Populate task name autocomplete
   const ndl = document.getElementById('t-name-list');
