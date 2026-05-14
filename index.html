@@ -2408,7 +2408,7 @@
     <div class="page-header">
       <div><h2>Notizen & Dokumente</h2><p>Notizen, Baupläne, Verträge und Genehmigungen</p></div>
       <div style="display:flex;gap:8px">
-        <input type="file" id="datei-upload-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx" style="display:none" onchange="uploadDokument(this)">
+        <input type="file" id="datei-upload-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx" multiple style="display:none" onchange="uploadDokument(this)">
         <button class="btn btn-ghost" onclick="document.getElementById('datei-upload-input').click()">📎 Dokument</button>
         <button class="btn btn-primary" onclick="openModal('modal-notiz')">+ Notiz</button>
       </div>
@@ -3176,7 +3176,7 @@
   <div class="modal">
     <h3 id="t-modal-title">Aufgabe hinzufügen</h3>
     <input type="hidden" id="t-edit-id">
-    <div class="form-row"><label>Aufgabe</label><input type="text" id="t-name" placeholder="z.B. Angebot einholen"></div>
+    <div class="form-row"><label>Aufgabe</label><input type="text" id="t-name" list="t-name-list" placeholder="z.B. Angebot einholen"><datalist id="t-name-list"></datalist></div>
     <div class="form-row"><label>Priorität</label>
       <select id="t-prio"><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select>
     </div>
@@ -3236,7 +3236,8 @@
     <h3 id="n-modal-title">Notiz hinzufügen</h3>
     <input type="hidden" id="n-edit-id">
     <div class="form-row"><label>Titel</label><input type="text" id="n-title" placeholder="Titel"></div>
-    <div class="form-row"><label>Inhalt</label><textarea id="n-text" placeholder="Deine Notiz..."></textarea></div>
+    <div class="form-row"><label>Was ist zu tun / Erinnerung</label><textarea id="n-text" placeholder="Was muss ich erledigen / nachfragen?"></textarea></div>
+    <div class="form-row"><label>Erkenntnisse / Ergebnis</label><textarea id="n-ergebnis" placeholder="Was hat sich ergeben? Antworten, Notizen nach dem Gespräch…" rows="3"></textarea></div>
     <div class="form-row"><label>Farbe</label>
       <select id="n-color">
         <option value="white">Standard (Weiß)</option>
@@ -3333,6 +3334,10 @@
       </select>
     </div>
     <div class="form-row"><label>Notiz</label><textarea id="ang-notiz" placeholder="Details, Konditionen..."></textarea></div>
+    <div class="form-row">
+      <label>PDF / Scan anhängen (optional)</label>
+      <input type="file" id="ang-datei-input" accept=".pdf,.jpg,.jpeg,.png" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px;font-size:0.82rem;color:var(--text);width:100%">
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-angebot');resetAngModal()">Abbrechen</button>
       <button class="btn btn-ghost" id="ang-to-rechnung-btn" style="display:none" onclick="angebotZuRechnung()">→ Zu Rechnung umwandeln</button>
@@ -5381,6 +5386,12 @@ function _populateTaskPersonList() {
   if (!dl) return;
   const names = state.kontakte.map(k => k.name).filter(Boolean);
   dl.innerHTML = names.map(n => `<option value="${n}">`).join('');
+  // Populate task name autocomplete
+  const ndl = document.getElementById('t-name-list');
+  if (ndl) {
+    const taskNames = [...new Set((state.aufgaben||[]).map(t => t.name).filter(Boolean))];
+    ndl.innerHTML = taskNames.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+  }
 }
 
 function saveTask() {
@@ -5928,10 +5939,11 @@ function addNotiz() {
   const prev   = editId ? state.notizen.find(n => n.id === editId) : null;
   const item = {
     id:    editId || Date.now(),
-    title: document.getElementById('n-title').value || 'Notiz',
-    text:  document.getElementById('n-text').value,
-    color: document.getElementById('n-color').value,
-    datum: prev?.datum || today(),
+    title:    document.getElementById('n-title').value || 'Notiz',
+    text:     document.getElementById('n-text').value,
+    ergebnis: document.getElementById('n-ergebnis').value.trim(),
+    color:    document.getElementById('n-color').value,
+    datum:    prev?.datum || today(),
     // Preserve task-link; mark as user-edited so _syncTaskNotiz won't overwrite text
     ...(prev?.__taskId ? { __taskId: prev.__taskId, __userEdited: true } : {})
   };
@@ -5943,7 +5955,7 @@ function addNotiz() {
   }
   save(); closeModal('modal-notiz');
   showToast(editId ? '✏️ Notiz aktualisiert' : '✅ Notiz gespeichert', 'success');
-  ['n-title','n-text'].forEach(id => document.getElementById(id).value = '');
+  ['n-title','n-text','n-ergebnis'].forEach(id => document.getElementById(id).value = '');
   if (document.getElementById('n-edit-id')) document.getElementById('n-edit-id').value = '';
   if (document.getElementById('n-modal-title')) document.getElementById('n-modal-title').textContent = 'Notiz hinzufügen';
   renderNotizen();
@@ -5952,8 +5964,9 @@ function addNotiz() {
 function editNotiz(id) {
   const n = state.notizen.find(n => n.id === id);
   if (!n) return;
-  document.getElementById('n-title').value = n.title || '';
-  document.getElementById('n-text').value  = n.text  || '';
+  document.getElementById('n-title').value   = n.title   || '';
+  document.getElementById('n-text').value    = n.text    || '';
+  document.getElementById('n-ergebnis').value = n.ergebnis || '';
   const cSel = document.getElementById('n-color');
   Array.from(cSel.options).forEach(o => { if (o.value === n.color) o.selected = true; });
   if (document.getElementById('n-edit-id')) document.getElementById('n-edit-id').value = id;
@@ -5986,6 +5999,7 @@ function renderNotizen() {
         <div style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--text3);margin-bottom:5px">${fmtDate(n.datum)}${taskBadge ? '&nbsp;&nbsp;' + taskBadge : ''}</div>
         <div style="font-size:0.92rem;font-weight:700;margin-bottom:7px;padding-right:60px;color:var(--text)">${n.title}</div>
         <div style="font-size:0.82rem;color:var(--text2);line-height:1.55;white-space:pre-wrap">${n.text}</div>
+        ${n.ergebnis ? `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0"><div style="font-size:0.78rem;color:var(--text3);font-style:italic;line-height:1.45;white-space:pre-wrap">${n.ergebnis}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -6010,19 +6024,22 @@ function dateiGroesse(bytes) {
 }
 
 async function uploadDokument(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Datei zu groß (max. 5 MB)', 'error'); input.value=''; return; }
-  const data = await new Promise((res, rej) => {
-    const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
-  });
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  const tooBig = files.filter(f => f.size > 5 * 1024 * 1024);
+  if (tooBig.length) { showToast(`⚠️ ${tooBig.length > 1 ? tooBig.length + ' Dateien sind' : tooBig[0].name + ' ist'} zu groß (max. 5 MB je Datei)`, 'error'); input.value=''; return; }
   const kat = prompt(`Kategorie wählen:\n${DATEI_KAT.map((k,i)=>`${i+1}. ${k}`).join('\n')}\n\nNummer eingeben (1–${DATEI_KAT.length}):`, '7');
   const katName = DATEI_KAT[(parseInt(kat)||7) - 1] || 'Sonstiges';
   state.dateien = state.dateien || [];
-  state.dateien.push({ id: Date.now(), name: file.name, type: file.type, size: file.size, kat: katName, datum: today(), data });
+  for (const file of files) {
+    const data = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+    });
+    state.dateien.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, kat: katName, datum: today(), data });
+  }
   save(); input.value = '';
   renderDokumente();
-  showToast('📎 Dokument gespeichert', 'success');
+  showToast(`📎 ${files.length > 1 ? files.length + ' Dokumente' : 'Dokument'} gespeichert`, 'success');
 }
 
 function downloadDokument(id) {
@@ -6030,6 +6047,23 @@ function downloadDokument(id) {
   if (!d) return;
   const a = document.createElement('a');
   a.href = d.data; a.download = d.name; a.click();
+}
+
+function openDokument(id) {
+  const d = (state.dateien||[]).find(d => d.id === id);
+  if (!d) return;
+  // PDFs and images can be opened inline in the browser
+  const viewable = ['application/pdf','image/jpeg','image/jpg','image/png','image/gif','image/webp'];
+  if (viewable.includes(d.type) || d.type?.startsWith('image/')) {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(`<html><head><title>${d.name}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}img{max-width:100%;max-height:100vh}iframe{width:100vw;height:100vh;border:none}</style></head><body>${d.type==='application/pdf'?`<iframe src="${d.data}"></iframe>`:`<img src="${d.data}" alt="${d.name}">`}</body></html>`);
+      win.document.close();
+    }
+  } else {
+    // For other file types, fall back to download
+    downloadDokument(id);
+  }
 }
 
 function deleteDokument(id) {
@@ -6055,6 +6089,7 @@ function renderDokumente() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <span style="font-size:1.8rem;line-height:1">${dateiIcon(d.type)}</span>
         <div style="display:flex;gap:4px">
+          <button class="action-btn" onclick="openDokument(${d.id})" title="Öffnen">🔍</button>
           <button class="action-btn" onclick="downloadDokument(${d.id})" title="Herunterladen">⬇️</button>
           <button class="action-btn del" onclick="deleteDokument(${d.id})" title="Löschen">🗑</button>
         </div>
@@ -8595,7 +8630,7 @@ function resetAngModal() {
   document.getElementById('ang-to-rechnung-btn').style.display = 'none';
 }
 
-function saveAngebot() {
+async function saveAngebot() {
   state.angebote = state.angebote || [];
   const editId = parseInt(document.getElementById('ang-edit-id').value) || null;
   const item = {
@@ -8609,6 +8644,17 @@ function saveAngebot() {
     status:   document.getElementById('ang-status').value,
     notiz:    document.getElementById('ang-notiz').value
   };
+  // Handle file attachment
+  const fileInput = document.getElementById('ang-datei-input');
+  if (fileInput?.files?.[0]) {
+    const f = fileInput.files[0];
+    if (f.size <= 5*1024*1024) {
+      item.datei = await new Promise((res,rej) => {
+        const r = new FileReader(); r.onload = e => res({ name: f.name, type: f.type, data: e.target.result }); r.onerror = rej; r.readAsDataURL(f);
+      });
+    }
+    fileInput.value = '';
+  }
   if (editId) {
     const idx = state.angebote.findIndex(a => a.id === editId);
     if (idx > -1) state.angebote[idx] = item;
@@ -8721,6 +8767,7 @@ function renderAngVergleich() {
               <span class="badge ${statusColor[a.status]||'badge-gray'}">${a.status}</span>
               <div style="display:flex;gap:4px">
                 <button class="action-btn" onclick="editAngebot(${a.id})" title="Bearbeiten">✏️</button>
+                ${a.datei ? `<button class="action-btn" onclick="openAngebotDatei(${a.id})" title="${a.datei.name}">📎</button>` : ''}
                 <button class="action-btn del" onclick="deleteAngebot(${a.id})" title="Löschen">🗑</button>
               </div>
             </div>
@@ -8729,6 +8776,21 @@ function renderAngVergleich() {
       </div>
     </div>`;
   }).join('');
+}
+
+function openAngebotDatei(id) {
+  const a = (state.angebote||[]).find(a => a.id === id);
+  if (!a?.datei) return;
+  const viewable = ['application/pdf','image/jpeg','image/jpg','image/png','image/gif'];
+  if (viewable.includes(a.datei.type) || a.datei.type?.startsWith('image/')) {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(`<html><head><title>${a.datei.name}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}img{max-width:100%;max-height:100vh}iframe{width:100vw;height:100vh;border:none}</style></head><body>${a.datei.type==='application/pdf'?`<iframe src="${a.datei.data}"></iframe>`:`<img src="${a.datei.data}">`}</body></html>`);
+      win.document.close();
+    }
+  } else {
+    const el = document.createElement('a'); el.href = a.datei.data; el.download = a.datei.name; el.click();
+  }
 }
 
 // ── Angebot KI ──
@@ -9895,8 +9957,31 @@ async function enableNotifFromModal() {
 }
 
 // Re-schedule whenever app comes back to foreground
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') scheduleAllReminders();
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    scheduleAllReminders();
+    // Re-pull cloud data to pick up changes from other devices
+    if (currentUser) {
+      const cloudData = await loadFromCloud();
+      if (cloudData) {
+        applyModuleVisibility();
+        const active = document.querySelector('.page.active');
+        if (active) {
+          const pageId = active.id.replace('page-', '');
+          if (pageId === 'dashboard') renderDashboard();
+          else if (pageId === 'kosten') renderKosten();
+          else if (pageId === 'budget') renderBudget();
+          else if (pageId === 'aufgaben') renderTasks();
+          else if (pageId === 'dokumente') { renderNotizen(); renderDokumente(); }
+          else if (pageId === 'angebote') renderAngebote();
+          else if (pageId === 'zahlungsplan') renderZahlungsplan();
+          else if (pageId === 'kontakte') renderKontakte();
+          else if (pageId === 'maengel') renderMaengel();
+          else if (pageId === 'fotos') renderFotos();
+        }
+      }
+    }
+  }
 });
 
 // Init on load — SW first, then schedule after ready
@@ -9907,12 +9992,15 @@ registerSW().then(() => {
 });
 
 // Sync immediately when page is about to close
-window.addEventListener('beforeunload', () => {
+function _flushSync() {
   if (currentUser && syncTimeout) {
     clearTimeout(syncTimeout);
-    syncToCloud(); // async – fires but may not fully complete; localStorage is the safety net
+    syncTimeout = null;
+    syncToCloud();
   }
-});
+}
+window.addEventListener('beforeunload', _flushSync);
+window.addEventListener('pagehide', _flushSync); // more reliable on iOS/mobile
 
 // ── PDF EXPORT ──────────────────────────────────────────────────────────────
 function pdfHeader(doc, title, subtitle) {
