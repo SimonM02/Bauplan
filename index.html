@@ -2409,8 +2409,19 @@
       <div><h2>Notizen & Dokumente</h2><p>Notizen, Baupläne, Verträge und Genehmigungen</p></div>
       <div style="display:flex;gap:8px">
         <input type="file" id="datei-upload-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx" multiple style="display:none" onchange="uploadDokument(this)">
-        <button class="btn btn-ghost" onclick="document.getElementById('datei-upload-input').click()">📎 Dokument</button>
+        <button class="btn btn-ghost" id="dokument-upload-btn" onclick="document.getElementById('datei-upload-input').click()">📎 Dokument</button>
         <button class="btn btn-primary" onclick="openModal('modal-notiz')">+ Notiz</button>
+      </div>
+    </div>
+
+    <!-- Upload progress bar -->
+    <div id="dokument-upload-progress" style="display:none;margin-bottom:16px;background:var(--surface2);border-radius:10px;padding:12px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:0.82rem;font-weight:600;color:var(--text2)" id="dokument-upload-label">Dokument wird geladen…</span>
+        <span style="font-size:0.78rem;color:var(--text3)" id="dokument-upload-pct">0%</span>
+      </div>
+      <div style="background:var(--border);border-radius:99px;height:6px;overflow:hidden">
+        <div id="dokument-upload-bar" style="height:100%;background:var(--accent);border-radius:99px;transition:width 0.2s;width:0%"></div>
       </div>
     </div>
 
@@ -6055,20 +6066,92 @@ function dateiGroesse(bytes) {
   return (bytes/1024/1024).toFixed(1) + ' MB';
 }
 
+let _dateiKatReject = null;
+
+function _pickDateiKat() {
+  return new Promise((resolve, reject) => {
+    _dateiKatReject = reject;
+    // Build category list from budget categories + fallback defaults
+    const budgetKats = (state.budgetKat||[]).map(k => ({ name: k.name, icon: k.icon || '📁' }));
+    const defaults   = [
+      { name: 'Bauplan', icon: '📐' }, { name: 'Genehmigung', icon: '🏛️' },
+      { name: 'Vertrag', icon: '📝' }, { name: 'Rechnung', icon: '🧾' },
+      { name: 'Foto', icon: '📸' },    { name: 'Sonstiges', icon: '📁' }
+    ];
+    // Merge: budget cats first, then defaults not already present
+    const budgetNames = new Set(budgetKats.map(k => k.name));
+    const allKats = [...budgetKats, ...defaults.filter(d => !budgetNames.has(d.name))];
+
+    const list = document.getElementById('datei-kat-list');
+    list.innerHTML = allKats.map(k => `
+      <button onclick="closeModal('modal-datei-kat');_dateiKatResolve('${k.name.replace(/'/g,"\\'")}')"
+        style="display:flex;align-items:center;gap:12px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:11px 14px;cursor:pointer;font-family:'Inter',sans-serif;font-size:0.875rem;font-weight:600;color:var(--text);text-align:left;transition:all 0.15s;width:100%"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-light)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
+        <span style="font-size:1.2rem;width:28px;text-align:center">${k.icon}</span>
+        <span>${k.name}</span>
+      </button>`).join('');
+
+    window._dateiKatResolve = (name) => { _dateiKatReject = null; resolve(name); };
+    openModal('modal-datei-kat');
+  });
+}
+
 async function uploadDokument(input) {
   const files = Array.from(input.files);
   if (!files.length) return;
   const tooBig = files.filter(f => f.size > 5 * 1024 * 1024);
-  if (tooBig.length) { showToast(`⚠️ ${tooBig.length > 1 ? tooBig.length + ' Dateien sind' : tooBig[0].name + ' ist'} zu groß (max. 5 MB je Datei)`, 'error'); input.value=''; return; }
-  const kat = prompt(`Kategorie wählen:\n${DATEI_KAT.map((k,i)=>`${i+1}. ${k}`).join('\n')}\n\nNummer eingeben (1–${DATEI_KAT.length}):`, '7');
-  const katName = DATEI_KAT[(parseInt(kat)||7) - 1] || 'Sonstiges';
+  if (tooBig.length) {
+    showToast(`⚠️ ${tooBig.length > 1 ? tooBig.length + ' Dateien sind' : tooBig[0].name + ' ist'} zu groß (max. 5 MB je Datei)`, 'error');
+    input.value = ''; return;
+  }
+
+  // Pick category via modal
+  let katName;
+  try { katName = await _pickDateiKat(); }
+  catch { input.value = ''; return; } // cancelled
+
+  // Show progress bar
+  const prog    = document.getElementById('dokument-upload-progress');
+  const bar     = document.getElementById('dokument-upload-bar');
+  const pct     = document.getElementById('dokument-upload-pct');
+  const label   = document.getElementById('dokument-upload-label');
+  const btn     = document.getElementById('dokument-upload-btn');
+  if (prog) prog.style.display = 'block';
+  if (btn)  { btn.disabled = true; btn.textContent = '⏳ Lädt…'; }
+
   state.dateien = state.dateien || [];
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (label) label.textContent = `${file.name} wird geladen…`;
+    const progress = Math.round((i / files.length) * 100);
+    if (bar) bar.style.width = progress + '%';
+    if (pct) pct.textContent = progress + '%';
+
     const data = await new Promise((res, rej) => {
-      const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file);
+      const r = new FileReader();
+      r.onprogress = e => {
+        if (e.lengthComputable && bar && pct) {
+          const fileProgress = Math.round((i / files.length + e.loaded / e.total / files.length) * 100);
+          bar.style.width = fileProgress + '%';
+          pct.textContent = fileProgress + '%';
+        }
+      };
+      r.onload = e => res(e.target.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
     });
     state.dateien.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, kat: katName, datum: today(), data });
   }
+
+  // Complete
+  if (bar) bar.style.width = '100%';
+  if (pct) pct.textContent = '100%';
+  await new Promise(r => setTimeout(r, 400));
+  if (prog) prog.style.display = 'none';
+  if (bar)  bar.style.width = '0%';
+  if (btn)  { btn.disabled = false; btn.textContent = '📎 Dokument'; }
+
   save(); input.value = '';
   renderDokumente();
   showToast(`📎 ${files.length > 1 ? files.length + ' Dokumente' : 'Dokument'} gespeichert`, 'success');
@@ -10283,6 +10366,18 @@ function exportRechnungenPDF() {
     </button>
   </div>
 </div>
+<!-- Dokument Kategorie Modal -->
+<div class="modal-overlay" id="modal-datei-kat">
+  <div class="modal" style="max-width:400px">
+    <h3>📂 Kategorie wählen</h3>
+    <p style="font-size:0.82rem;color:var(--text3);margin-bottom:16px">Welcher Kategorie soll das Dokument zugeordnet werden?</p>
+    <div id="datei-kat-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-datei-kat');_dateiKatReject&&_dateiKatReject()">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
 <!-- Upgrade Modal -->
 <div class="modal-overlay" id="modal-upgrade">
   <div class="modal" style="max-width:420px;text-align:center">
