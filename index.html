@@ -2004,9 +2004,9 @@
     <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
       <span class="icon">🏗️</span><span>Dashboard</span>
     </div>
-    <div class="nav-item" onclick="showPage('dashboard');setTimeout(runKIAnalysis,200)" data-page="ki"
+    <div class="nav-item" onclick="if(window._userPlan==='pro'){showPage('dashboard');setTimeout(runKIAnalysis,200)}else{showUpgradeModal('KI-Bauberater')}" data-page="ki"
       style="background:linear-gradient(135deg,#eef2ff,#f0ebff);color:var(--accent);font-weight:700">
-      <span class="icon">🤖</span><span>KI-Bauberater</span>
+      <span class="icon">🤖</span><span>KI-Bauberater</span><span id="ki-nav-lock" style="margin-left:auto;font-size:0.7rem;opacity:0.7">🔒</span>
     </div>
 
     <div class="nav-section" data-module="finanzen">Finanzen</div>
@@ -4020,6 +4020,9 @@ async function loadUserPlan() {
       }
       // Store plan in state for feature gating
       window._userPlan = 'pro';
+      // Hide lock icons
+      const lockEl = document.getElementById('ki-nav-lock');
+      if (lockEl) lockEl.style.display = 'none';
     } else {
       freeEl.style.display = 'block';
       window._userPlan = 'free';
@@ -7550,6 +7553,19 @@ function renderWartung() {
   document.getElementById('w-ok').textContent = ok;
 }
 
+// ──────────────── UPGRADE MODAL ────────────────
+function showUpgradeModal(feature) {
+  const featureTexts = {
+    'KI-Bauberater':      { icon: '🤖', desc: 'Der KI-Bauberater analysiert dein Projekt automatisch und gibt dir konkrete Handlungsempfehlungen – das ist eine Pro-Funktion.' },
+    'Mehrere Projekte':   { icon: '📁', desc: 'Mit dem kostenlosen Plan kannst du ein Projekt verwalten. Mit Pro hast du unbegrenzte Projekte.' },
+  };
+  const info = featureTexts[feature] || { icon: '⭐', desc: `„${feature}" ist nur im Pro-Abo verfügbar.` };
+  document.getElementById('upgrade-modal-icon').textContent   = info.icon;
+  document.getElementById('upgrade-modal-feature').textContent = feature;
+  document.getElementById('upgrade-modal-desc').textContent   = info.desc;
+  openModal('modal-upgrade');
+}
+
 // ──────────────── TOAST ────────────────
 function showToast(msg, type='success', duration=3200) {
   const bg = type==='success' ? 'var(--success)' : type==='warning' ? '#d97706' : 'var(--danger)';
@@ -7647,6 +7663,7 @@ Liefere 3-6 insights. Sei spezifisch mit Zahlen aus den Projektdaten. Wenn das P
 }
 
 async function runKIAnalysis() {
+  if (window._userPlan !== 'pro') { showUpgradeModal('KI-Bauberater'); return; }
   const snapshot = buildProjectSnapshot();
   document.getElementById('ki-empty').style.display    = 'none';
   document.getElementById('ki-results').style.display  = 'none';
@@ -7903,7 +7920,12 @@ function saveProject() {
       }
     }
   } else {
-    // New project
+    // New project – Pro check
+    if (window._userPlan !== 'pro' && projects.length >= 1) {
+      closeModal('modal-new-project');
+      showUpgradeModal('Mehrere Projekte');
+      return;
+    }
     const proj = EMPTY_PROJECT();
     proj.settings.name    = document.getElementById('np-name').value || 'Neues Projekt';
     proj.settings.type    = document.getElementById('np-type').value;
@@ -10232,5 +10254,36 @@ function exportRechnungenPDF() {
     </button>
   </div>
 </div>
+<!-- Upgrade Modal -->
+<div class="modal-overlay" id="modal-upgrade">
+  <div class="modal" style="max-width:420px;text-align:center">
+    <div style="font-size:3rem;margin-bottom:12px" id="upgrade-modal-icon">⭐</div>
+    <h3 style="margin-bottom:8px">Pro-Funktion: <span id="upgrade-modal-feature"></span></h3>
+    <p id="upgrade-modal-desc" style="font-size:0.86rem;color:var(--text3);margin-bottom:20px;line-height:1.6"></p>
+
+    <div style="background:linear-gradient(135deg,#ede9fe,#dbeafe);border-radius:12px;padding:16px 18px;margin-bottom:20px;text-align:left">
+      <div style="font-weight:700;font-size:0.85rem;color:#1e1b4b;margin-bottom:10px">⭐ Buildora Pro beinhaltet:</div>
+      <div style="font-size:0.82rem;color:#3730a3;line-height:1.8">
+        ✅ KI-Bauberater – automatische Projektanalyse<br>
+        ✅ Unbegrenzte Projekte<br>
+        ✅ Alle zukünftigen Pro-Funktionen<br>
+        ✅ Prioritäts-Support
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button onclick="closeModal('modal-upgrade');startStripeCheckout()"
+        style="width:100%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;border-radius:10px;padding:13px;font-family:'Inter',sans-serif;font-size:0.92rem;font-weight:700;color:white;cursor:pointer;transition:opacity 0.15s"
+        onmouseover="this.style.opacity='0.88'" onmouseout="this.style.opacity='1'">
+        ⭐ Jetzt Pro werden
+      </button>
+      <button onclick="closeModal('modal-upgrade')"
+        style="width:100%;background:none;border:1.5px solid var(--border);border-radius:10px;padding:11px;font-family:'Inter',sans-serif;font-size:0.85rem;font-weight:600;color:var(--text3);cursor:pointer">
+        Vielleicht später
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
