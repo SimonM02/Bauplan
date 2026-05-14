@@ -6100,9 +6100,11 @@ function _pickDateiKat() {
 async function uploadDokument(input) {
   const files = Array.from(input.files);
   if (!files.length) return;
-  const tooBig = files.filter(f => f.size > 5 * 1024 * 1024);
+
+  // PDFs/Docs: max 10 MB; images get auto-compressed so no hard limit
+  const tooBig = files.filter(f => !f.type.startsWith('image/') && f.size > 10 * 1024 * 1024);
   if (tooBig.length) {
-    showToast(`⚠️ ${tooBig.length > 1 ? tooBig.length + ' Dateien sind' : tooBig[0].name + ' ist'} zu groß (max. 5 MB je Datei)`, 'error');
+    showToast(`⚠️ ${tooBig[0].name} ist zu groß (max. 10 MB für Dokumente)`, 'error');
     input.value = ''; return;
   }
 
@@ -6112,39 +6114,51 @@ async function uploadDokument(input) {
   catch { input.value = ''; return; } // cancelled
 
   // Show progress bar
-  const prog    = document.getElementById('dokument-upload-progress');
-  const bar     = document.getElementById('dokument-upload-bar');
-  const pct     = document.getElementById('dokument-upload-pct');
-  const label   = document.getElementById('dokument-upload-label');
-  const btn     = document.getElementById('dokument-upload-btn');
+  const prog  = document.getElementById('dokument-upload-progress');
+  const bar   = document.getElementById('dokument-upload-bar');
+  const pct   = document.getElementById('dokument-upload-pct');
+  const label = document.getElementById('dokument-upload-label');
+  const btn   = document.getElementById('dokument-upload-btn');
   if (prog) prog.style.display = 'block';
   if (btn)  { btn.disabled = true; btn.textContent = '⏳ Lädt…'; }
 
   state.dateien = state.dateien || [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    if (label) label.textContent = `${file.name} wird geladen…`;
-    const progress = Math.round((i / files.length) * 100);
-    if (bar) bar.style.width = progress + '%';
-    if (pct) pct.textContent = progress + '%';
+    const isImage = file.type.startsWith('image/');
+    if (label) label.textContent = isImage
+      ? `🖼 ${file.name} wird komprimiert…`
+      : `📄 ${file.name} wird geladen…`;
+    if (bar) bar.style.width = Math.round((i / files.length) * 100) + '%';
+    if (pct) pct.textContent  = Math.round((i / files.length) * 100) + '%';
 
-    const data = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onprogress = e => {
-        if (e.lengthComputable && bar && pct) {
-          const fileProgress = Math.round((i / files.length + e.loaded / e.total / files.length) * 100);
-          bar.style.width = fileProgress + '%';
-          pct.textContent = fileProgress + '%';
-        }
-      };
-      r.onload = e => res(e.target.result);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-    state.dateien.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, kat: katName, datum: today(), data });
+    let data, storedSize;
+    if (isImage) {
+      // Auto-compress: max 1600px, 80% quality – keeps images small enough for localStorage
+      const compressed = await compressImage(file, 1600, 0.80);
+      storedSize = compressed.size;
+      data = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result); r.onerror = rej;
+        r.readAsDataURL(compressed);
+      });
+    } else {
+      storedSize = file.size;
+      data = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onprogress = e => {
+          if (e.lengthComputable && bar && pct) {
+            const fp = Math.round((i / files.length + e.loaded / e.total / files.length) * 100);
+            bar.style.width = fp + '%'; pct.textContent = fp + '%';
+          }
+        };
+        r.onload = e => res(e.target.result); r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+    state.dateien.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: storedSize, kat: katName, datum: today(), data });
   }
 
-  // Complete
   if (bar) bar.style.width = '100%';
   if (pct) pct.textContent = '100%';
   await new Promise(r => setTimeout(r, 400));
