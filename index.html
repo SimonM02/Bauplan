@@ -5377,35 +5377,57 @@ async function generateKIMeilensteine(regen = false) {
   document.getElementById('ki-zeitplan-actions').style.display = 'none';
 
   const s = state.settings;
-  const budgetKats = (state.budgetKat||[]).map(k => `${k.icon||''} ${k.name} (${fmt(k.budget||0)})`).join(', ');
-  const startDate  = s.start || new Date().toISOString().split('T')[0];
+  const todayStr   = new Date().toISOString().split('T')[0];
+  const todayDE    = new Date().toLocaleDateString('de-AT', { day:'2-digit', month:'long', year:'numeric' });
+  const startDate  = s.start || todayStr;
   const endDate    = s.end   || '';
-  const today      = new Date().toISOString().split('T')[0];
+  const budgetKats = (state.budgetKat||[]).map(k => `${k.icon||''} ${k.name} (${fmt(k.budget||0)})`).join('\n  ');
 
-  const prompt = `Du bist ein erfahrener Bauprojektmanager in Österreich. Erstelle einen realistischen Projektplan für folgendes Bauprojekt:
+  // Existing data context
+  const existingMS = (state.meilensteine||[]).map(m => `- ${m.name} (${m.datum||'kein Datum'})${m.done?' ✓':''}`).join('\n  ') || 'keine';
+  const existingPhasen = (state.gantt||[]).map(g => `- ${g.name} (${g.start||'?'} – ${g.end||'?'})`).join('\n  ') || 'keine';
+  const offeneAufgaben = (state.aufgaben||[]).filter(t=>t.status!=='Erledigt').length;
+  const bezahlt = (state.kosten||[]).reduce((s,k)=>s+(parseFloat(k.betrag)||0),0);
 
-Projekttyp: ${s.type || 'Neubau'}
-Projektname: ${s.name || 'Bauprojekt'}
-Gesamtbudget: ${fmt(s.budget || 0)}
-Projektstart: ${startDate}
-${endDate ? `Geplantes Ende: ${endDate}` : ''}
-Budgetkategorien: ${budgetKats || 'nicht definiert'}
+  const prompt = `Du bist ein erfahrener Bauprojektmanager in Österreich.
 
-Erstelle einen sinnvollen Projektplan mit:
-1. 6-10 wichtige MEILENSTEINE (Schlüsselereignisse/Entscheidungspunkte)
-2. 5-8 BAUPHASEN für den Zeitplan (mit Start- und Enddatum)
+WICHTIG – Heutiges Datum: ${todayStr} (${todayDE})
+Alle generierten Daten MÜSSEN nach dem Projektstart liegen und realistisch vom heutigen Datum aus berechnet sein.
 
-Antworte NUR mit validem JSON in diesem Format (kein Text davor oder danach):
+PROJEKTDATEN:
+- Typ: ${s.type || 'Neubau'}
+- Name: ${s.name || 'Bauprojekt'}
+- Gesamtbudget: ${fmt(s.budget || 0)}
+- Projektstart: ${startDate} ${startDate > todayStr ? `(in ${Math.round((new Date(startDate)-new Date())/(1000*60*60*24))} Tagen)` : '(bereits gestartet)'}
+${endDate ? `- Geplantes Ende: ${endDate}` : '- Kein fixes Enddatum'}
+- Bereits ausgegeben: ${fmt(bezahlt)}
+- Offene Aufgaben: ${offeneAufgaben}
+
+BUDGETKATEGORIEN:
+  ${budgetKats || 'keine definiert'}
+
+BEREITS VORHANDENE MEILENSTEINE (nicht duplizieren!):
+  ${existingMS}
+
+BEREITS VORHANDENE BAUPHASEN (nicht duplizieren!):
+  ${existingPhasen}
+
+Erstelle einen vollständigen Projektplan mit:
+1. 6-10 MEILENSTEINE – wichtige Schlüsselereignisse (Baugenehmigung, Spatenstich, Rohbau fertig, Einzug, …)
+2. 5-8 BAUPHASEN – aufeinander aufbauende Phasen mit realistischen Zeiträumen
+
+Berechne alle Daten konkret ausgehend von Projektstart ${startDate}.
+${endDate ? `Der Plan muss bis spätestens ${endDate} fertig sein.` : ''}
+
+Antworte NUR mit validem JSON (kein Text davor/danach):
 {
   "meilensteine": [
     { "name": "Baugenehmigung erhalten", "datum": "YYYY-MM-DD", "text": "Kurze Beschreibung", "budgetKat": "Kategoriename oder leer" }
   ],
   "phasen": [
-    { "name": "Planung & Einreichung", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "typ": "phase", "budgetKat": "Kategoriename oder leer" }
+    { "name": "Planung & Einreichung", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "budgetKat": "Kategoriename oder leer" }
   ]
-}
-
-Verwende realistische Zeiträume basierend auf dem Projekttyp. Alle Daten müssen nach ${startDate} liegen.`;
+}`;
 
   try {
     const resp = await fetch('/api/ki', {
