@@ -1729,7 +1729,7 @@
 <!-- ══════════════════════════════════════
      AUTH OVERLAY (Login / Register)
 ══════════════════════════════════════ -->
-<div id="auth-overlay" style="display:none;position:fixed;inset:0;z-index:1000;background:var(--bg);align-items:center;justify-content:center">
+<div id="auth-overlay" style="display:none;position:fixed;inset:0;z-index:1000;background:#f0f4ff;align-items:center;justify-content:center">
   <div style="width:100%;max-width:420px;padding:24px">
 
     <!-- Logo -->
@@ -5054,14 +5054,27 @@ function _updateDarkModeToggle(on) {
   if (knob) knob.style.left = on ? '23px' : '3px';
 }
 
-// Restore sidebar state on load
+// Restore sidebar + dark mode on load
 (function() {
   if (localStorage.getItem('sidebarCollapsed') === '1') {
     document.body.classList.add('sidebar-collapsed');
   }
-  if (localStorage.getItem('darkMode') === '1') {
+  // Dark mode: prefer saved setting, fall back to system preference
+  const saved = localStorage.getItem('darkMode');
+  const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const useDark = saved !== null ? saved === '1' : sysDark;
+  if (useDark) {
     document.body.classList.add('dark-mode');
+    // toggle button state will be set once DOM is ready
+    document.addEventListener('DOMContentLoaded', () => _updateDarkModeToggle(true));
   }
+  // Follow system changes if user hasn't manually chosen
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (localStorage.getItem('darkMode') === null) {
+      document.body.classList.toggle('dark-mode', e.matches);
+      _updateDarkModeToggle(e.matches);
+    }
+  });
 })();
 
 function togglePrivacy() {
@@ -6211,7 +6224,7 @@ function renderNotizen() {
         ? `<span style="font-size:0.63rem;padding:2px 7px;border-radius:99px;background:#dbeafe;color:#1d4ed8;font-weight:600;margin-right:4px">📋 Aufgabe</span>`
         : '';
       return `
-      <div class="card" style="background:${n.color||'white'};position:relative">
+      <div class="card" style="background:${n.color && n.color !== 'white' ? n.color : 'var(--surface)'};position:relative">
         <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px;align-items:center">
           <button class="action-btn" onclick="editNotiz(${n.id})" title="Bearbeiten">✏️</button>
           <button class="action-btn del" onclick="deleteNotiz(${n.id})">🗑</button>
