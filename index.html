@@ -1930,8 +1930,34 @@
           <div class="form-row"><label>Projektname *</label><input type="text" id="ob-name" placeholder="z.B. Einfamilienhaus Musterhausen"></div>
           <div class="form-row"><label>Adresse / Ort</label><input type="text" id="ob-address" placeholder="Musterstraße 1, 5201 Seekirchen"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-row"><label>Baubeginn</label><input type="date" id="ob-start"></div>
-            <div class="form-row"><label>Fertigstellung</label><input type="date" id="ob-end"></div>
+            <div class="form-row">
+              <label>Baubeginn</label>
+              <div style="display:grid;grid-template-columns:60px 1fr 74px;gap:5px">
+                <select id="ob-start-d" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">TT</option>
+                </select>
+                <select id="ob-start-m" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">Monat</option>
+                </select>
+                <select id="ob-start-y" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">JJJJ</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Fertigstellung</label>
+              <div style="display:grid;grid-template-columns:60px 1fr 74px;gap:5px">
+                <select id="ob-end-d" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">TT</option>
+                </select>
+                <select id="ob-end-m" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">Monat</option>
+                </select>
+                <select id="ob-end-y" style="font-size:0.85rem;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer">
+                  <option value="">JJJJ</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="form-row">
             <label>Projektfarbe</label>
@@ -8817,6 +8843,40 @@ function addObBudgetCat() {
   // Focus the last name input? Not easy without extra ID – user can edit in budget page later
 }
 
+const DE_MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function _fillDateSelects(prefix, valueYYYYMMDD) {
+  const curYear = new Date().getFullYear();
+  const dSel = document.getElementById(prefix+'-d');
+  const mSel = document.getElementById(prefix+'-m');
+  const ySel = document.getElementById(prefix+'-y');
+  if (!dSel) return;
+  // Days
+  dSel.innerHTML = '<option value="">TT</option>' +
+    Array.from({length:31},(_,i)=>{ const v=String(i+1).padStart(2,'0'); return `<option value="${v}">${v}</option>`; }).join('');
+  // Months
+  mSel.innerHTML = '<option value="">Monat</option>' +
+    DE_MONTHS.map((m,i)=>{ const v=String(i+1).padStart(2,'0'); return `<option value="${v}">${m}</option>`; }).join('');
+  // Years (current-1 to +15)
+  ySel.innerHTML = '<option value="">JJJJ</option>' +
+    Array.from({length:17},(_,i)=>{ const y=curYear-1+i; return `<option value="${y}">${y}</option>`; }).join('');
+  // Pre-fill if value given
+  if (valueYYYYMMDD) {
+    const [y,m,d] = valueYYYYMMDD.split('-');
+    if (d) dSel.value = d;
+    if (m) mSel.value = m;
+    if (y) ySel.value = y;
+  }
+}
+
+function _getDateFromSelects(prefix) {
+  const d = document.getElementById(prefix+'-d')?.value;
+  const m = document.getElementById(prefix+'-m')?.value;
+  const y = document.getElementById(prefix+'-y')?.value;
+  if (!d || !m || !y) return '';
+  return `${y}-${m}-${d}`;
+}
+
 function showOnboarding() {
   obStep = 0;
   obType = 'Neubau';
@@ -8824,6 +8884,8 @@ function showOnboarding() {
   document.getElementById('onboarding-overlay').style.display = 'block';
   renderObColorPicker('#3d6ff8');
   renderObModules();
+  _fillDateSelects('ob-start');
+  _fillDateSelects('ob-end');
   // Pre-select Neubau template visually
   document.querySelectorAll('#ob-budget-templates button').forEach(b => {
     b.classList.remove('ob-tpl-active');
@@ -8927,8 +8989,8 @@ async function finishOnboarding() {
   proj.settings.name    = document.getElementById('ob-name').value.trim() || 'Mein Projekt';
   proj.settings.type    = obType;
   proj.settings.address = document.getElementById('ob-address').value.trim();
-  proj.settings.start   = document.getElementById('ob-start').value;
-  proj.settings.end     = document.getElementById('ob-end').value;
+  proj.settings.start   = _getDateFromSelects('ob-start');
+  proj.settings.end     = _getDateFromSelects('ob-end');
   proj.settings.color   = obColor;
   proj.settings.modules = modules;
 
