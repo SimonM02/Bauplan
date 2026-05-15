@@ -121,6 +121,25 @@
   body.dark-mode .badge-teal       { background: #0f2420 !important; color: #2dd4bf !important; }
   body.dark-mode .badge-orange     { background: #2d1e0a !important; color: #fb923c !important; }
 
+  /* ── Force light mode for pre-login screens (auth, onboarding, splash) ── */
+  body.dark-mode #auth-overlay,
+  body.dark-mode #onboarding-overlay,
+  body.dark-mode #auth-splash                                     { background: #f0f4ff !important; color: #1a1a2e !important; }
+  body.dark-mode #auth-overlay *,
+  body.dark-mode #onboarding-overlay *                            { color: inherit; }
+  body.dark-mode #auth-overlay input,
+  body.dark-mode #onboarding-overlay input,
+  body.dark-mode #auth-overlay select,
+  body.dark-mode #onboarding-overlay select,
+  body.dark-mode #auth-overlay textarea,
+  body.dark-mode #onboarding-overlay textarea                     { background: #ffffff !important; color: #1a1a2e !important; border-color: #e2e8f0 !important; }
+  body.dark-mode #auth-overlay input::placeholder,
+  body.dark-mode #onboarding-overlay input::placeholder           { color: #a0aec0 !important; }
+  body.dark-mode #auth-overlay .btn-ghost,
+  body.dark-mode #onboarding-overlay .btn-ghost                   { background: #ffffff !important; color: #4a5568 !important; border-color: #e2e8f0 !important; }
+  body.dark-mode #auth-overlay .modal-like,
+  body.dark-mode #onboarding-overlay .card                        { background: #ffffff !important; border-color: #e2e8f0 !important; }
+
   /* Chart tabs */
   body.dark-mode .chart-tab        { background: var(--surface2) !important; color: var(--text2) !important; border-color: var(--border) !important; }
   body.dark-mode .chart-tab.active { background: var(--accent) !important; color: white !important; }
@@ -1821,7 +1840,8 @@
 <!-- ══════════════════════════════════════
      ONBOARDING OVERLAY
 ══════════════════════════════════════ -->
-<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:999;background:var(--bg);overflow-y:auto">
+<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:999;background:#f8faff;overflow-y:auto;color:#1a1a2e">
+  <style>#onboarding-overlay,#onboarding-overlay *{--bg:#f8faff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}</style>
   <div style="max-width:560px;margin:0 auto;padding:40px 24px">
 
     <!-- Progress dots -->
