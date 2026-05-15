@@ -8428,6 +8428,16 @@ async function onAuthSuccess(user, isNewUser = false) {
     renderDashboard();
     showDsgvoIfNeeded();
     setTimeout(requestNotifications, 1500);
+    // Auto-recovery: if app loaded but state looks empty (no kosten, no aufgaben, no notizen)
+    // and this is NOT a new user → offer to restore from cloud
+    if (!isNewUser) {
+      const stateIsEmpty = !state.kosten?.length && !state.aufgaben?.length &&
+                           !state.notizen?.length && !state.dokumentation?.length &&
+                           !state.budgetKat?.length;
+      if (stateIsEmpty) {
+        setTimeout(() => _showRecoveryBanner(), 1200);
+      }
+    }
   }
   // Load subscription plan (non-blocking)
   loadUserPlan();
@@ -9970,6 +9980,33 @@ function renderKostenaufteilung() {
 })();
 
 // ── REFRESH & BEFOREUNLOAD ──────────────────────────────────────────────────
+function _showRecoveryBanner() {
+  if (document.getElementById('recovery-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'recovery-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ef4444;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.9rem;box-shadow:0 2px 12px rgba(0,0,0,0.2)';
+  banner.innerHTML = `
+    <span>⚠️ <strong>Daten nicht geladen.</strong> Bitte klicke auf "Wiederherstellen" um deine Daten aus der Cloud zu laden.</span>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button onclick="_forceCloudReload()" style="background:#fff;color:#ef4444;border:none;padding:6px 14px;border-radius:6px;font-weight:700;cursor:pointer">🔄 Wiederherstellen</button>
+      <button onclick="this.closest('#recovery-banner').remove()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer">✕</button>
+    </div>`;
+  document.body.prepend(banner);
+}
+
+async function _forceCloudReload() {
+  const btn = document.querySelector('#recovery-banner button');
+  if (btn) { btn.textContent = '⏳ Lädt...'; btn.disabled = true; }
+  localStorage.removeItem('bauplan_updated_at');
+  await loadFromCloud();
+  applyModuleVisibility();
+  renderDashboard();
+  const activePage = document.querySelector('.page.active');
+  if (activePage) showPage(activePage.id.replace('page-', ''));
+  document.getElementById('recovery-banner')?.remove();
+  showToast('✅ Daten wiederhergestellt!', 'success');
+}
+
 async function refreshApp() {
   const btn = document.querySelector('[onclick="refreshApp()"]');
   if (btn) { btn.style.animation = 'spin 0.8s linear'; btn.disabled = true; }
