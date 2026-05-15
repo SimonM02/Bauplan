@@ -8561,35 +8561,22 @@ async function loadFromCloud() {
       return null;
     }
 
-    const cloudTs    = data?.updated_at || data?.daten?.updated_at || '';
-    const localTs    = localStorage.getItem('bauplan_updated_at') || '';
-    const localOwner = localStorage.getItem('bauplan_user_id') || '';
-
     // Helper: does a projects array have meaningful data?
     const _hasData = (arr) => Array.isArray(arr) && arr.some(p =>
       (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
       (p.budgetKat?.length > 0) || (p.notizen?.length > 0) || (p.maengel?.length > 0)
     );
 
-    const localProjects = JSON.parse(localStorage.getItem('bauplan_projects') || '[]');
-    const localHasData  = localOwner === currentUser?.id && _hasData(localProjects);
-    const cloudHasData  = _hasData(data?.daten?.projects);
+    const cloudHasData = _hasData(data?.daten?.projects);
 
-    // LOCAL wins if: local has real data AND (cloud is empty OR local is newer)
-    if (localHasData && (!cloudHasData || (localTs && cloudTs && localTs > cloudTs))) {
-      console.log('Local data used – syncing to cloud');
-      _loadFromLocalStorage();
-      syncToCloud();
-      return data?.daten || null;
-    }
-
-    // CLOUD wins if it has real data
+    // CLOUD always wins if it has real data — simple and safe, no timestamp comparison
     if (cloudHasData) {
       projects = data.daten.projects;
       const savedId = data.daten.currentProjectId;
       const found = savedId && projects.find(p => p.id === savedId);
       currentProjectId = found ? found.id : projects[0].id;
       loadProject(currentProjectId, false);
+      const cloudTs = data?.daten?.updated_at || '';
       localStorage.setItem('bauplan_projects',   JSON.stringify(projects));
       localStorage.setItem('bauplan_current',    String(currentProjectId));
       localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
@@ -8597,7 +8584,20 @@ async function loadFromCloud() {
       return data.daten;
     }
 
-    // Neither has data – load whatever is local (new user or fresh start)
+    // Cloud is empty → check local (recovery or new user)
+    const localOwner = localStorage.getItem('bauplan_user_id') || '';
+    const localProjects = JSON.parse(localStorage.getItem('bauplan_projects') || '[]');
+    const localHasData = localOwner === currentUser?.id && _hasData(localProjects);
+
+    if (localHasData) {
+      // Local has data but cloud is empty → restore cloud from local
+      console.log('Cloud empty but local has data – restoring cloud');
+      _loadFromLocalStorage();
+      syncToCloud();
+      return null;
+    }
+
+    // Both empty → fresh start or new user
     if (localOwner === currentUser?.id) {
       _loadFromLocalStorage();
     } else {
