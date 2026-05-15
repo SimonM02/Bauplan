@@ -1854,7 +1854,32 @@
      ONBOARDING OVERLAY
 ══════════════════════════════════════ -->
 <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:999;background:#f8faff;overflow-y:auto;color:#1a1a2e">
-  <style>#onboarding-overlay,#onboarding-overlay *{--bg:#f8faff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}</style>
+  <style>
+    #onboarding-overlay,#onboarding-overlay *{--bg:#f8faff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}
+    .cdp-wrap{position:relative}
+    .cdp-field{display:flex;align-items:center;justify-content:space-between;background:#ffffff;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;cursor:pointer;font-size:0.9rem;color:#1a1a2e;transition:border-color 0.15s;user-select:none}
+    .cdp-field:hover{border-color:#3d6ff8}
+    .cdp-field svg{opacity:0.45;flex-shrink:0}
+    .cdp-text{flex:1;color:#a0aec0}
+    .cdp-text.has-value{color:#1a1a2e}
+    .cdp-popup{position:absolute;top:calc(100% + 6px);left:0;z-index:2000;background:#ffffff;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,0.12);min-width:260px}
+    .cdp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .cdp-nav{background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:6px;color:#1a1a2e;transition:background 0.1s}
+    .cdp-nav:hover{background:#f0f4ff}
+    .cdp-month-label{font-weight:700;font-size:0.9rem;color:#1a1a2e;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background 0.1s}
+    .cdp-month-label:hover{background:#f0f4ff}
+    .cdp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+    .cdp-dow{text-align:center;font-size:0.7rem;font-weight:600;color:#a0aec0;padding:4px 0}
+    .cdp-day{text-align:center;font-size:0.82rem;padding:6px 4px;border-radius:7px;cursor:pointer;color:#1a1a2e;transition:background 0.1s}
+    .cdp-day:hover{background:#f0f4ff}
+    .cdp-day.today{font-weight:700;color:#3d6ff8}
+    .cdp-day.selected{background:#3d6ff8!important;color:#ffffff!important;font-weight:700}
+    .cdp-day.empty{pointer-events:none}
+    .cdp-year-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-height:180px;overflow-y:auto}
+    .cdp-year-btn{text-align:center;font-size:0.82rem;padding:7px 4px;border-radius:7px;cursor:pointer;color:#1a1a2e;border:none;background:none;transition:background 0.1s}
+    .cdp-year-btn:hover{background:#f0f4ff}
+    .cdp-year-btn.selected{background:#3d6ff8!important;color:#ffffff!important;font-weight:700}
+  </style>
   <div style="max-width:560px;margin:0 auto;padding:40px 24px">
 
     <!-- Progress dots -->
@@ -1930,8 +1955,28 @@
           <div class="form-row"><label>Projektname *</label><input type="text" id="ob-name" placeholder="z.B. Einfamilienhaus Musterhausen"></div>
           <div class="form-row"><label>Adresse / Ort</label><input type="text" id="ob-address" placeholder="Musterstraße 1, 5201 Seekirchen"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-row"><label>Baubeginn</label><input type="date" id="ob-start"></div>
-            <div class="form-row"><label>Fertigstellung</label><input type="date" id="ob-end"></div>
+            <div class="form-row">
+              <label>Baubeginn</label>
+              <div class="cdp-wrap" id="ob-start-wrap">
+                <div class="cdp-field" onclick="cdpOpen('ob-start')">
+                  <span class="cdp-text" id="ob-start-text">TT.MM.JJJJ</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div class="cdp-popup" id="ob-start-popup" style="display:none"></div>
+                <input type="hidden" id="ob-start">
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Fertigstellung</label>
+              <div class="cdp-wrap" id="ob-end-wrap">
+                <div class="cdp-field" onclick="cdpOpen('ob-end')">
+                  <span class="cdp-text" id="ob-end-text">TT.MM.JJJJ</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div class="cdp-popup" id="ob-end-popup" style="display:none"></div>
+                <input type="hidden" id="ob-end">
+              </div>
+            </div>
           </div>
           <div class="form-row">
             <label>Projektfarbe</label>
@@ -8818,6 +8863,101 @@ function addObBudgetCat() {
 }
 
 const DE_MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const CDP_DOW = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+
+// ── Custom Date Picker ─────────────────────────────────
+const _cdp = {}; // state per picker id
+
+function cdpOpen(id) {
+  // close any other open pickers
+  document.querySelectorAll('.cdp-popup').forEach(p => {
+    if (p.id !== id+'-popup') p.style.display = 'none';
+  });
+  const popup = document.getElementById(id+'-popup');
+  if (!popup) return;
+  if (popup.style.display !== 'none') { popup.style.display = 'none'; return; }
+  // init state
+  const val = document.getElementById(id)?.value;
+  let now = val ? new Date(val+'T12:00:00') : new Date();
+  _cdp[id] = { year: now.getFullYear(), month: now.getMonth(), showYears: false };
+  cdpRender(id);
+  popup.style.display = 'block';
+  // close on outside click
+  setTimeout(() => {
+    const handler = (e) => {
+      if (!document.getElementById(id+'-wrap')?.contains(e.target)) {
+        popup.style.display = 'none';
+        document.removeEventListener('click', handler);
+      }
+    };
+    document.addEventListener('click', handler);
+  }, 10);
+}
+
+function cdpRender(id) {
+  const popup = document.getElementById(id+'-popup');
+  const s = _cdp[id];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const selVal = document.getElementById(id)?.value || '';
+
+  if (s.showYears) {
+    const curY = new Date().getFullYear();
+    let html = `<div class="cdp-header">
+      <span class="cdp-month-label" onclick="_cdp['${id}'].showYears=false;cdpRender('${id}')">← Zurück</span>
+      <span style="font-weight:700;font-size:0.9rem;color:#1a1a2e">Jahr wählen</span>
+      <span></span>
+    </div><div class="cdp-year-grid">`;
+    for (let y = curY - 2; y <= curY + 15; y++) {
+      html += `<button class="cdp-year-btn${s.year===y?' selected':''}" onclick="cdpSelYear('${id}',${y})">${y}</button>`;
+    }
+    html += '</div>';
+    popup.innerHTML = html;
+    return;
+  }
+
+  const firstDay = new Date(s.year, s.month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(s.year, s.month+1, 0).getDate();
+  const offset = (firstDay + 6) % 7; // Mon=0
+
+  let html = `<div class="cdp-header">
+    <button class="cdp-nav" onclick="cdpNavMonth('${id}',-1)">‹</button>
+    <span class="cdp-month-label" onclick="_cdp['${id}'].showYears=true;cdpRender('${id}')">${DE_MONTHS[s.month]} ${s.year}</span>
+    <button class="cdp-nav" onclick="cdpNavMonth('${id}',1)">›</button>
+  </div>
+  <div class="cdp-grid">`;
+  CDP_DOW.forEach(d => html += `<div class="cdp-dow">${d}</div>`);
+  for (let i = 0; i < offset; i++) html += `<div class="cdp-day empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${s.year}-${String(s.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = ds === todayStr;
+    const isSel = ds === selVal;
+    html += `<div class="cdp-day${isToday?' today':''}${isSel?' selected':''}" onclick="cdpSelect('${id}','${ds}')">${d}</div>`;
+  }
+  html += '</div>';
+  popup.innerHTML = html;
+}
+
+function cdpNavMonth(id, dir) {
+  _cdp[id].month += dir;
+  if (_cdp[id].month < 0) { _cdp[id].month = 11; _cdp[id].year--; }
+  if (_cdp[id].month > 11) { _cdp[id].month = 0; _cdp[id].year++; }
+  cdpRender(id);
+}
+
+function cdpSelYear(id, y) {
+  _cdp[id].year = y;
+  _cdp[id].showYears = false;
+  cdpRender(id);
+}
+
+function cdpSelect(id, dateStr) {
+  document.getElementById(id).value = dateStr;
+  const [y,m,d] = dateStr.split('-');
+  const textEl = document.getElementById(id+'-text');
+  textEl.textContent = `${d}.${m}.${y}`;
+  textEl.classList.add('has-value');
+  document.getElementById(id+'-popup').style.display = 'none';
+}
 
 function _fillDateSelects(prefix, valueYYYYMMDD) {
   const curYear = new Date().getFullYear();
