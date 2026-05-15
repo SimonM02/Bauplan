@@ -88,6 +88,9 @@
   body.dark-mode input:not([type=checkbox]):not([type=radio]):not([type=range]),
   body.dark-mode select,
   body.dark-mode textarea          { background: var(--surface2) !important; color: var(--text) !important; border-color: var(--border) !important; }
+  body.dark-mode input:not([type=checkbox]):not([type=radio]):not([type=range]):focus,
+  body.dark-mode select:focus,
+  body.dark-mode textarea:focus    { background: var(--surface3) !important; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(61,111,248,0.18) !important; }
   body.dark-mode input::placeholder,
   body.dark-mode textarea::placeholder { color: var(--text3) !important; }
   body.dark-mode .form-row select option { background: var(--surface2) !important; color: var(--text) !important; }
@@ -122,6 +125,16 @@
   body.dark-mode .badge-orange     { background: #2d1e0a !important; color: #fb923c !important; }
 
   /* ── Force light mode for pre-login screens (auth, onboarding, splash) ── */
+  /* Override ALL CSS variables so var(--accent-light) etc. resolve to light values */
+  body.dark-mode #auth-overlay,
+  body.dark-mode #onboarding-overlay {
+    --bg: #f8f9fb; --surface: #ffffff; --surface2: #f4f5f7; --surface3: #eceef2;
+    --border: #e4e7ec; --border-strong: #c8cdd8;
+    --accent: #3d6ff8; --accent-hover: #2d5fd8; --accent-light: #eff4ff;
+    --text: #1a1a2e; --text2: #4a5568; --text3: #718096;
+    --danger: #dc2626; --danger-light: #fef2f2;
+    --success: #16a34a; --success-light: #f0fdf4;
+  }
   body.dark-mode #auth-overlay,
   body.dark-mode #onboarding-overlay,
   body.dark-mode #auth-splash                                     { background: #f0f4ff !important; color: #1a1a2e !important; }
@@ -1076,7 +1089,7 @@
   .form-row input:focus, .form-row select:focus, .form-row textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(61,111,248,0.12);
-    background: white;
+    background: var(--surface);
   }
   .form-row textarea { resize: vertical; min-height: 80px; }
   .form-row select option { background: white; }
@@ -1883,7 +1896,7 @@
         <p style="color:var(--text3);margin-bottom:20px;font-size:0.87rem">Wähle die Art deines Projekts – du kannst das später ändern.</p>
         <div style="display:flex;flex-direction:column;gap:10px" id="ob-type-picker">
           <div onclick="selectObType('Neubau',this)"
-            style="display:flex;gap:14px;align-items:center;background:white;border-radius:12px;padding:15px 16px;border:2px solid var(--accent);background:var(--accent-light);cursor:pointer;transition:all 0.15s"
+            style="display:flex;gap:14px;align-items:center;border-radius:12px;padding:15px 16px;border:2px solid #3d6ff8;background:#eff4ff;cursor:pointer;transition:all 0.15s"
             class="ob-selected">
             <span style="font-size:1.5rem;flex-shrink:0">🏠</span>
             <div><div style="font-weight:700;color:var(--text)">Neubau</div><div style="font-size:0.76rem;color:var(--text3)">Haus oder Wohnung neu bauen</div></div>
@@ -8841,12 +8854,12 @@ function selectObColor(color, el) {
 function selectObType(type, el) {
   obType = type;
   document.querySelectorAll('#ob-type-picker > div').forEach(d => {
-    d.style.borderColor = 'var(--border)';
-    d.style.background  = 'white';
+    d.style.borderColor = '#e4e7ec';
+    d.style.background  = '#ffffff';
     d.classList.remove('ob-selected');
   });
-  el.style.borderColor = 'var(--accent)';
-  el.style.background  = 'var(--accent-light)';
+  el.style.borderColor = '#3d6ff8';
+  el.style.background  = '#eff4ff';
   el.classList.add('ob-selected');
 }
 
