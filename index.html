@@ -6658,8 +6658,8 @@ function renderGantt() {
               const sc = statusColors[g.status] || '#6b7280';
               const isPhase = g.type === 'phase';
               const dur = daysBetween(g.start, g.end);
-              return `<div style="height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:10px;background:${i%2===0?'white':'var(--surface2)'}"
-                onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='${i%2===0?'white':'var(--surface2)'}'">
+              return `<div style="height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:10px;background:${i%2===0?'var(--surface)':'var(--surface2)'}"
+                onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='${i%2===0?'var(--surface)':'var(--surface2)'}'">
                 <div style="width:4px;height:36px;border-radius:2px;flex-shrink:0;background:${getColor(g)}"></div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:0.84rem;font-weight:${isPhase?'700':'600'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
@@ -6682,7 +6682,7 @@ function renderGantt() {
           <div style="position:relative;width:${totalWidth}px;min-height:${totalH}px">
 
             <!-- Month header row -->
-            <div style="position:sticky;top:0;z-index:6;height:${monthH}px;background:#f0f4ff;border-bottom:1px solid var(--border)">
+            <div style="position:sticky;top:0;z-index:6;height:${monthH}px;background:var(--surface2);border-bottom:1px solid var(--border)">
               ${months.map(m => {
                 const mDays = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
                 const x = daysBetween(minD.toISOString().split('T')[0], m.toISOString().split('T')[0]) * ganttDayWidth;
@@ -6720,7 +6720,7 @@ function renderGantt() {
               const y = headerH + i * GANTT_ROW_H;
               const color = getColor(g);
               const dur = daysBetween(g.start, g.end);
-              const rowBg = i%2===0 ? 'white' : 'var(--surface2)';
+              const rowBg = i%2===0 ? 'var(--surface)' : 'var(--surface2)';
               return `
                 <div style="position:absolute;left:0;top:${y}px;width:${totalWidth}px;height:${GANTT_ROW_H}px;border-bottom:1px solid var(--border);background:${rowBg}"></div>
                 <div class="gantt-bar-drag" data-id="${g.id}"
