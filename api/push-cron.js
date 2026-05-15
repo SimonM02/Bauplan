@@ -3,24 +3,32 @@ import webpush from 'web-push';
 const SUPA_URL = 'https://savrxykygruzyngttekl.supabase.co';
 
 export default async function handler(req, res) {
-  // Secured by secret header – set CRON_SECRET in Vercel env vars
-  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+  // Vercel cron sends: Authorization: Bearer <CRON_SECRET>
+  // Also accept legacy x-cron-secret header for manual calls
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers['authorization'] || '';
+  const legacyHeader = req.headers['x-cron-secret'] || '';
+  const token = authHeader.replace('Bearer ', '').trim();
+
+  if (cronSecret && token !== cronSecret && legacyHeader !== cronSecret) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
   const pub  = process.env.VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
-  const subj = process.env.VAPID_SUBJECT || 'mailto:admin@buildora.app';
+  const subj = process.env.VAPID_SUBJECT || 'mailto:info@buildora.app';
   if (!pub || !priv) return res.status(500).json({ error: 'VAPID keys not configured' });
 
   webpush.setVapidDetails(subj, pub, priv);
 
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const hdrs   = { Authorization: `Bearer ${svcKey}`, apikey: svcKey, 'Content-Type': 'application/json' };
+  if (!svcKey) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' });
 
-  // Fetch all unsent notifications due within the past 2 minutes (catches missed cron runs)
-  const cutoff = new Date(Date.now() + 30000).toISOString(); // +30s tolerance
-  const oldest = new Date(Date.now() - 120000).toISOString(); // ignore older than 2 min
+  const hdrs = { Authorization: `Bearer ${svcKey}`, apikey: svcKey, 'Content-Type': 'application/json' };
+
+  // Fetch unsent notifications due within +30s tolerance, not older than 2 minutes
+  const cutoff = new Date(Date.now() + 30000).toISOString();
+  const oldest = new Date(Date.now() - 120000).toISOString();
 
   const notifRes = await fetch(
     `${SUPA_URL}/rest/v1/scheduled_notifications?scheduled_for=lte.${cutoff}&scheduled_for=gte.${oldest}&sent=eq.false&select=*`,
@@ -56,12 +64,12 @@ export default async function handler(req, res) {
           { method: 'DELETE', headers: hdrs });
       }
     }
-    // Mark as sent regardless (avoid retry spam)
+    // Mark as sent regardless
     await fetch(
       `${SUPA_URL}/rest/v1/scheduled_notifications?user_id=eq.${notif.user_id}&notif_id=eq.${encodeURIComponent(notif.notif_id)}`,
       { method: 'PATCH', headers: hdrs, body: JSON.stringify({ sent: true }) }
     );
   }
 
-  return res.status(200).json({ sent });
+  return res.status(200).json({ sent, checked: notifications.length });
 }
