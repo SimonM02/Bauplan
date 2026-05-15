@@ -1730,7 +1730,13 @@
      AUTH OVERLAY (Login / Register)
 ══════════════════════════════════════ -->
 <div id="auth-overlay" style="display:none;position:fixed;inset:0;z-index:1000;background:#f0f4ff;align-items:center;justify-content:center;color:#1a1a2e">
-  <style>#auth-overlay,#auth-overlay *{--bg:#f0f4ff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}</style>
+  <style>
+    #auth-overlay,#auth-overlay *{--bg:#f0f4ff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}
+    #auth-overlay input{background:#ffffff!important;border:1.5px solid #e2e8f0!important;border-radius:10px!important;padding:11px 14px!important;font-size:0.9rem!important;color:#1a1a2e!important;width:100%!important;box-sizing:border-box!important;outline:none!important;-webkit-text-fill-color:#1a1a2e!important}
+    #auth-overlay input::placeholder{color:#a0aec0!important;-webkit-text-fill-color:#a0aec0!important}
+    #auth-overlay input:focus{border-color:#3d6ff8!important;box-shadow:0 0 0 3px rgba(61,111,248,0.12)!important}
+    #auth-overlay input:-webkit-autofill,#auth-overlay input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #ffffff inset!important;-webkit-text-fill-color:#1a1a2e!important}
+  </style>
   <div style="width:100%;max-width:420px;padding:24px">
 
     <!-- Logo -->
@@ -1763,7 +1769,7 @@
         </div>
         <div class="form-row" style="margin-bottom:6px">
           <label>Passwort</label>
-          <input type="password" id="auth-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+          <input type="password" id="auth-password" placeholder="Passwort eingeben" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
         <div style="text-align:right;margin-bottom:18px">
           <span onclick="showForgotPassword()" style="font-size:0.78rem;color:var(--accent);cursor:pointer;font-weight:600">Passwort vergessen?</span>
@@ -1786,7 +1792,7 @@
         </div>
         <div class="form-row" style="margin-bottom:18px">
           <label>Passwort wiederholen</label>
-          <input type="password" id="reg-password2" placeholder="••••••••" onkeydown="if(event.key==='Enter')doRegister()">
+          <input type="password" id="reg-password2" placeholder="Passwort wiederholen" onkeydown="if(event.key==='Enter')doRegister()">
         </div>
         <button onclick="doRegister()" id="btn-register"
           style="width:100%;background:var(--accent);color:white;border:none;padding:12px;border-radius:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(61,111,248,0.3)">
