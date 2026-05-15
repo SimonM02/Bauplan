@@ -1729,6 +1729,14 @@
 <!-- ══════════════════════════════════════
      AUTH OVERLAY (Login / Register)
 ══════════════════════════════════════ -->
+<!-- Splash screen: covers app until auth state is known -->
+<div id="auth-splash" style="position:fixed;inset:0;z-index:1001;background:#f0f4ff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="width:64px;height:64px;background:#3d6ff8;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 8px 24px rgba(61,111,248,0.3)">🏗️</div>
+  <div style="font-size:1.4rem;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px">Buildora</div>
+  <div style="width:32px;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div style="height:100%;background:#3d6ff8;border-radius:2px;animation:splashLoad 1.2s ease-in-out infinite"></div></div>
+  <style>@keyframes splashLoad{0%{width:0%}50%{width:100%}100%{width:0%;margin-left:100%}}</style>
+</div>
+
 <div id="auth-overlay" style="display:none;position:fixed;inset:0;z-index:1000;background:#f0f4ff;align-items:center;justify-content:center;color:#1a1a2e">
   <style>
     #auth-overlay,#auth-overlay *{--bg:#f0f4ff;--surface:#ffffff;--surface2:#f0f4ff;--text:#1a1a2e;--text2:#4a5568;--text3:#718096;--border:#e2e8f0;color:inherit}
@@ -8305,9 +8313,11 @@ let syncTimeout = null;
 
 // ── AUTH FUNCTIONS ──────────────────────────────
 function showAuthOverlay() {
+  document.getElementById('auth-splash')?.remove();
   document.getElementById('auth-overlay').style.display = 'flex';
 }
 function hideAuthOverlay() {
+  document.getElementById('auth-splash')?.remove();
   document.getElementById('auth-overlay').style.display = 'none';
 }
 
