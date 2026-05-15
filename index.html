@@ -5156,12 +5156,7 @@ async function handleRechnungScan(input) {
   let dataUrl;
   if (isImage) {
     const compressed = await compressImage(file, 1280, 0.75);
-    dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(compressed);
-    });
+    dataUrl = compressed.dataUrl; // compressImage already returns { dataUrl, mediaType }
   } else {
     dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -7219,10 +7214,11 @@ function renderDokuPhotoPreviews() {
 
 async function addDoku() {
   state.dokumentation = state.dokumentation || [];
+  const editId = document.getElementById('modal-doku')._editId || null;
   const btn = document.querySelector('#modal-doku .btn-primary');
   if (btn && dokuPendingFiles.length > 0) { btn.textContent = 'Wird hochgeladen…'; btn.disabled = true; }
 
-  // Upload pending photos to storage
+  // Upload new pending photos to storage
   const uploadedFotos = [];
   for (const file of dokuPendingFiles) {
     try {
@@ -7233,8 +7229,7 @@ async function addDoku() {
     }
   }
 
-  state.dokumentation.push({
-    id:      Date.now(),
+  const data = {
     title:   document.getElementById('dk-title').value   || 'Eintrag',
     typ:     document.getElementById('dk-typ').value,
     raum:    document.getElementById('dk-raum').value,
@@ -7242,8 +7237,20 @@ async function addDoku() {
     hinweis: document.getElementById('dk-hinweis').value,
     datum:   document.getElementById('dk-datum').value   || today(),
     tags:    document.getElementById('dk-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
-    fotos:   uploadedFotos
-  });
+  };
+
+  if (editId) {
+    const idx = state.dokumentation.findIndex(d => d.id === editId);
+    if (idx > -1) {
+      const existingFotos = state.dokumentation[idx].fotos || [];
+      state.dokumentation[idx] = { ...state.dokumentation[idx], ...data, fotos: [...existingFotos, ...uploadedFotos] };
+    }
+    document.getElementById('modal-doku')._editId = null;
+    document.querySelector('#modal-doku h3').textContent = '📐 Dokumentation erfassen';
+  } else {
+    state.dokumentation.push({ id: Date.now(), ...data, fotos: uploadedFotos });
+  }
+
   save();
   closeModal('modal-doku');
   ['dk-title','dk-raum','dk-text','dk-hinweis','dk-datum','dk-tags'].forEach(id => document.getElementById(id).value = '');
@@ -7253,6 +7260,7 @@ async function addDoku() {
   if (prev) prev.innerHTML = '';
   if (btn) { btn.textContent = 'Speichern'; btn.disabled = false; }
   renderDoku();
+  showToast(editId ? '✏️ Eintrag aktualisiert' : '✅ Eintrag gespeichert', 'success');
 }
 
 // Add photo to existing doku entry
@@ -7619,36 +7627,6 @@ function filterDoku(typ, btn) {
   renderDoku();
 }
 
-// ── DOKUMENTATION ───────────────────────────────
-
-function addDoku() {
-  state.dokumentation = state.dokumentation || [];
-  const editId = document.getElementById('modal-doku')._editId;
-  const data = {
-    title:   document.getElementById('dk-title').value || 'Eintrag',
-    typ:     document.getElementById('dk-typ').value,
-    raum:    document.getElementById('dk-raum').value,
-    text:    document.getElementById('dk-text').value,
-    hinweis: document.getElementById('dk-hinweis').value,
-    datum:   document.getElementById('dk-datum').value || today(),
-    tags:    document.getElementById('dk-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-  };
-  if (editId) {
-    const idx = state.dokumentation.findIndex(d => d.id === editId);
-    if (idx > -1) state.dokumentation[idx] = { ...state.dokumentation[idx], ...data };
-    document.getElementById('modal-doku')._editId = null;
-    document.querySelector('#modal-doku h3').textContent = '📐 Dokumentation erfassen';
-  } else {
-    state.dokumentation.push({ id: Date.now(), ...data, fotos: [...dokuPendingPhotos] });
-  }
-  save();
-  closeModal('modal-doku');
-  ['dk-title','dk-raum','dk-text','dk-hinweis','dk-datum','dk-tags'].forEach(id => document.getElementById(id).value = '');
-  dokuPendingPhotos = [];
-  const prev = document.getElementById('dk-photo-previews');
-  if (prev) prev.innerHTML = '';
-  renderDoku();
-}
 
 function editDoku(id) {
   const d = (state.dokumentation||[]).find(d => d.id === id);
@@ -9476,36 +9454,6 @@ function resetMgModal() {
   if (prev) prev.innerHTML = '';
 }
 
-function saveMangel() {
-  state.maengel = state.maengel || [];
-  const editId = parseInt(document.getElementById('mg-edit-id').value) || null;
-  if (!document.getElementById('mg-titel').value.trim()) { showToast('⚠️ Bitte einen Titel eingeben', 'error'); return; }
-  if (document.getElementById('mg-status').value === 'Behoben' && !document.getElementById('mg-behoben-datum').value) { showToast('⚠️ Bitte Behebungsdatum angeben', 'error'); return; }
-  const existing = editId ? state.maengel.find(m => m.id === editId) : null;
-  const item = {
-    id:           editId || Date.now(),
-    titel:        document.getElementById('mg-titel').value || 'Mangel',
-    gewerk:       document.getElementById('mg-gewerk').value,
-    raum:         document.getElementById('mg-raum').value,
-    beschr:       document.getElementById('mg-beschr').value,
-    prio:         document.getElementById('mg-prio').value,
-    status:       document.getElementById('mg-status').value,
-    datum:        document.getElementById('mg-datum').value || today(),
-    behobenDatum: document.getElementById('mg-behoben-datum').value,
-    zustaendig:   document.getElementById('mg-zustaendig').value,
-    fotos:        [...(existing?.fotos||[]), ...mgPendingPhotos]
-  };
-  if (editId) {
-    const idx = state.maengel.findIndex(m => m.id === editId);
-    if (idx > -1) state.maengel[idx] = item;
-  } else {
-    state.maengel.push(item);
-  }
-  save(); closeModal('modal-mangel'); resetMgModal();
-  ['mg-titel','mg-raum','mg-beschr','mg-datum','mg-behoben-datum','mg-zustaendig'].forEach(id => document.getElementById(id).value = '');
-  renderMaengel();
-  showToast('✅ Mangel gespeichert', 'success');
-}
 
 function editMangel(id) {
   const m = (state.maengel||[]).find(m => m.id === id);
