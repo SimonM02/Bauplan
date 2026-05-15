@@ -5811,7 +5811,7 @@ function renderTasks() {
 
       <!-- Checkbox -->
       <div onclick="toggleTask(${t.id})"
-        style="width:24px;height:24px;border-radius:50%;border:2px solid ${isDone?'var(--success)':prioColors[t.prio]||'var(--border)'};background:${isDone?'var(--success)':'white'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;transition:all 0.15s"
+        style="width:24px;height:24px;border-radius:50%;border:2px solid ${isDone?'var(--success)':prioColors[t.prio]||'var(--border)'};background:${isDone?'var(--success)':'transparent'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:2px;transition:all 0.15s"
         title="${isDone?'Als offen markieren':'Als erledigt markieren'}">
         ${isDone?'<span style="color:white;font-size:0.8rem">✓</span>':''}
       </div>
