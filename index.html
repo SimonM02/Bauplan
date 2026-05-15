@@ -8444,11 +8444,38 @@ async function onAuthSuccess(user, isNewUser = false) {
 }
 
 // ── CLOUD SYNC ──────────────────────────────────
+
+// Save a local rolling backup (last 3 snapshots) before every cloud sync
+function _saveLocalBackup(projectsData) {
+  try {
+    const hasData = projectsData.some(p =>
+      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
+      (p.budgetKat?.length > 0) || (p.notizen?.length > 0)
+    );
+    if (!hasData) return; // never save empty state as backup
+    const ts = new Date().toISOString();
+    const b2 = localStorage.getItem('bauplan_backup_1') || null;
+    const b3 = localStorage.getItem('bauplan_backup_2') || null;
+    localStorage.setItem('bauplan_backup_3', b3 || '');
+    localStorage.setItem('bauplan_backup_2', b2 || '');
+    localStorage.setItem('bauplan_backup_1', JSON.stringify({ ts, projects: projectsData }));
+  } catch(e) { /* storage full – ignore */ }
+}
+
 async function syncToCloud() {
   if (!currentUser) return;
   try {
     const idx = projects.findIndex(p => p.id === currentProjectId);
     if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
+
+    // Safety check: never sync empty/blank state to cloud
+    const hasRealData = projects.some(p =>
+      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
+      (p.budgetKat?.length > 0) || (p.notizen?.length > 0)
+    );
+
+    // Save local rolling backup BEFORE syncing (only if data is real)
+    if (hasRealData) _saveLocalBackup(projects);
 
     const ts = new Date().toISOString();
     localStorage.setItem('bauplan_updated_at', ts); // keep local timestamp in sync
@@ -8465,9 +8492,21 @@ async function syncToCloud() {
       updated_at: ts
     };
 
-    // Check if row exists
+    // Check if row exists — also fetch current cloud data to check before overwriting
     const { data: existing } = await supa.from('projektdaten')
-      .select('id').eq('user_id', currentUser.id).maybeSingle();
+      .select('id, daten').eq('user_id', currentUser.id).maybeSingle();
+
+    // Safety: if cloud has real data but we're about to sync empty → ABORT
+    const cloudHasData = existing?.daten?.projects?.some(p =>
+      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
+      (p.budgetKat?.length > 0) || (p.notizen?.length > 0)
+    );
+    if (cloudHasData && !hasRealData) {
+      console.warn('syncToCloud aborted: would overwrite cloud data with empty state');
+      setSyncStatus('err');
+      _showRecoveryBanner();
+      return;
+    }
 
     if (existing) {
       const { error } = await supa.from('projektdaten').update({
