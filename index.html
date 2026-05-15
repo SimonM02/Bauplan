@@ -1953,7 +1953,7 @@
         <p style="color:var(--text3);margin-bottom:20px;font-size:0.87rem">Grundlegende Infos – alles kann später in den Einstellungen geändert werden.</p>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div class="form-row"><label>Projektname *</label><input type="text" id="ob-name" placeholder="z.B. Einfamilienhaus Musterhausen"></div>
-          <div class="form-row"><label>Adresse / Ort</label><input type="text" id="ob-address" placeholder="Musterstraße 1, 5201 Seekirchen"></div>
+          <div class="form-row"><label>Adresse / Ort</label><input type="text" id="ob-address" placeholder="Hauptstraße 12, 1010 Wien"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="form-row">
               <label>Baubeginn</label>
@@ -2571,7 +2571,7 @@
             </div>
             <div class="form-row">
               <label>Adresse / Ort</label>
-              <input id="s-address" type="text" placeholder="Musterstraße 1, 5201 Seekirchen" oninput="saveSettings()">
+              <input id="s-address" type="text" placeholder="Hauptstraße 12, 1010 Wien" oninput="saveSettings()">
             </div>
             <div style="padding-top:8px;border-top:1px solid var(--border)">
               <button class="btn btn-danger" style="font-size:0.8rem;padding:7px 14px"
@@ -2711,7 +2711,7 @@
           <div style="padding:16px 20px">
             <div id="personen-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
             <div style="display:flex;gap:8px">
-              <input type="text" id="new-person-name" placeholder="Name (z.B. Kredit, Simon, Maria)"
+              <input type="text" id="new-person-name" placeholder="Name (z.B. Kredit, Eigenkapital, Bank)"
                 style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 11px;font-family:'Inter',sans-serif;font-size:0.845rem;outline:none"
                 onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
                 onkeydown="if(event.key==='Enter')addZahlungsPerson()">
@@ -3118,7 +3118,7 @@
         <option value="Sonstiges">📋 Sonstiges</option>
       </select>
     </div>
-    <div class="form-row"><label>Adresse / Ort</label><input type="text" id="np-address" placeholder="Musterstraße 1, 5201 Seekirchen"></div>
+    <div class="form-row"><label>Adresse / Ort</label><input type="text" id="np-address" placeholder="Hauptstraße 12, 1010 Wien"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-row"><label>Baubeginn</label><input type="date" id="np-start"></div>
       <div class="form-row"><label>Fertigstellung</label><input type="date" id="np-end"></div>
@@ -10010,7 +10010,7 @@ function renderPersonenList() {
   if (!el) return;
   state.zahlungspersonen = state.zahlungspersonen || [];
   if (state.zahlungspersonen.length === 0) {
-    el.innerHTML = `<div style="font-size:0.82rem;color:var(--text3);text-align:center;padding:8px">Noch keine Personen – füge z.B. „Kredit", „Simon" oder „Maria" hinzu.</div>`;
+    el.innerHTML = `<div style="font-size:0.82rem;color:var(--text3);text-align:center;padding:8px">Noch keine Personen – füge z.B. „Kredit", „Eigenkapital" oder „Bank" hinzu.</div>`;
     return;
   }
   el.innerHTML = state.zahlungspersonen.map(p => `
@@ -10048,7 +10048,7 @@ function renderKostenaufteilung() {
       <div style="background:var(--accent-light);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;margin-bottom:20px">
         <div style="font-size:1.5rem;margin-bottom:8px">👥</div>
         <div style="font-weight:700;color:var(--text);margin-bottom:6px">Noch keine Zahlungspersonen</div>
-        <div style="font-size:0.84rem;color:var(--text2);margin-bottom:14px">Füge zuerst Personen in den Einstellungen hinzu (z.B. „Kredit", „Simon", „Maria")</div>
+        <div style="font-size:0.84rem;color:var(--text2);margin-bottom:14px">Füge zuerst Personen in den Einstellungen hinzu (z.B. „Kredit", „Eigenkapital", „Bank")</div>
         <button class="btn btn-primary" onclick="showPage('settings')">⚙ Zu den Einstellungen</button>
       </div>`;
     return;
@@ -10184,7 +10184,7 @@ function renderKostenaufteilung() {
         const demo = EMPTY_PROJECT();
         demo.settings.name    = 'Musterprojekt Einfamilienhaus';
         demo.settings.type    = 'Neubau';
-        demo.settings.address = 'Musterstraße 1, 5020 Salzburg';
+        demo.settings.address = 'Hauptstraße 12, 1010 Wien';
         demo.settings.start   = '2025-03-01';
         demo.settings.end     = '2026-06-30';
         demo.settings.color   = '#3d6ff8';
@@ -10199,14 +10199,14 @@ function renderKostenaufteilung() {
         demo.kosten = [
           { id: 101, datum:'2025-03-15', beschr:'Betonlieferung EG',   kat:'Rohbau',   mwst:20, netto:8333, betrag:10000, status:'Bezahlt', anbieter:'Betonwerk GmbH',   bezahltVon:'Kredit' },
           { id: 102, datum:'2025-04-10', beschr:'Mauerwerk Ziegel',    kat:'Rohbau',   mwst:20, netto:6250, betrag:7500,  status:'Bezahlt', anbieter:'Baumarkt AG',      bezahltVon:'Kredit' },
-          { id: 103, datum:'2025-05-20', beschr:'Dachstuhl Holz',      kat:'Dach',     mwst:20, netto:9167, betrag:11000, status:'Bezahlt', anbieter:'Zimmerei Huber',   bezahltVon:'Simon'  },
-          { id: 104, datum:'2025-06-01', beschr:'Elektroleitungen EG', kat:'Elektro',  mwst:20, netto:4167, betrag:5000,  status:'Bezahlt', anbieter:'Elektro Müller',   bezahltVon:'Maria'  },
+          { id: 103, datum:'2025-05-20', beschr:'Dachstuhl Holz',      kat:'Dach',     mwst:20, netto:9167, betrag:11000, status:'Bezahlt', anbieter:'Zimmerei Huber',   bezahltVon:'Eigenkapital' },
+          { id: 104, datum:'2025-06-01', beschr:'Elektroleitungen EG', kat:'Elektro',  mwst:20, netto:4167, betrag:5000,  status:'Bezahlt', anbieter:'Elektro Müller',   bezahltVon:'Eigenkapital' },
           { id: 105, datum:'2025-06-15', beschr:'Heizungsrohre',       kat:'Sanitär & Heizung', mwst:20, netto:5833, betrag:7000, status:'Ausstehend', anbieter:'Haustechnik GmbH', bezahltVon:'' },
         ];
         demo.zahlungspersonen = [
-          { id: 1, name: 'Kredit' },
-          { id: 2, name: 'Simon'  },
-          { id: 3, name: 'Maria'  },
+          { id: 1, name: 'Kredit'       },
+          { id: 2, name: 'Eigenkapital' },
+          { id: 3, name: 'Bank'         },
         ];
         demo.meilensteine = [
           { id: 1, name: 'Spatenstich',       datum:'2025-03-01', text:'Baubeginn', done: true  },
