@@ -2120,14 +2120,14 @@
       </div>
 
       <!-- Loading state -->
-      <div id="ki-loading" style="display:none;background:white;padding:28px;text-align:center">
+      <div id="ki-loading" style="display:none;background:var(--surface);padding:28px;text-align:center">
         <div style="font-size:2rem;margin-bottom:10px;animation:spin 1.2s linear infinite;display:inline-block">⚙️</div>
         <div style="font-weight:700;color:var(--text);margin-bottom:4px">Projekt wird analysiert…</div>
         <div style="font-size:0.82rem;color:var(--text3)">KI liest alle Daten, Kosten, Fortschritt und Wartungen</div>
       </div>
 
       <!-- Empty state -->
-      <div id="ki-empty" style="background:white;padding:24px 24px 20px">
+      <div id="ki-empty" style="background:var(--surface);padding:24px 24px 20px">
         <div style="display:flex;gap:10px;align-items:center;padding:14px 16px;background:var(--accent-light);border-radius:11px;border:1.5px dashed var(--accent)">
           <span style="font-size:1.2rem">💡</span>
           <span style="font-size:0.85rem;color:var(--accent);font-weight:600">Klicke „Jetzt analysieren" – der KI-Bauberater prüft dein gesamtes Projekt und gibt dir konkrete Handlungsempfehlungen.</span>
@@ -2135,7 +2135,7 @@
       </div>
 
       <!-- Results -->
-      <div id="ki-results" style="display:none;background:white">
+      <div id="ki-results" style="display:none;background:var(--surface)">
         <!-- Alert bar (urgent warnings) -->
         <div id="ki-alerts" style="border-bottom:1px solid var(--border)"></div>
         <!-- Insight cards -->
@@ -2682,7 +2682,7 @@
 
     <!-- Tab: Zeitplan -->
     <div id="plan-sec-zeitplan">
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:white;border-radius:var(--radius);border:1px solid var(--border);font-size:0.78rem;font-weight:600;color:var(--text2)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:10px 14px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);font-size:0.78rem;font-weight:600;color:var(--text2)">
         <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--accent);display:inline-block"></span>Phase</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#7c3aed;display:inline-block"></span>Aufgabe</span>
         <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:var(--success);display:inline-block"></span>Erledigt</span>
@@ -2704,7 +2704,7 @@
 
     <!-- Tab: Ablaufplan -->
     <div id="plan-sec-ablauf" style="display:none">
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:white;border-radius:12px;border:1.5px solid var(--border);font-size:0.8rem;font-weight:600;color:var(--text2)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:var(--surface);border-radius:12px;border:1.5px solid var(--border);font-size:0.8rem;font-weight:600;color:var(--text2)">
         <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#3d6ff8;display:inline-block"></span>Phase / Hauptblock</span>
         <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#22c55e;display:inline-block"></span>Erledigt</span>
         <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#f59e0b;display:inline-block"></span>In Arbeit</span>
@@ -5806,7 +5806,7 @@ function renderTasks() {
     if (t.time && !isDone) dueBadge += `<span style="font-size:0.65rem;color:var(--text3)" title="Erinnerung gesetzt">🔔</span>`;
 
     return `
-    <div style="background:white;border:1.5px solid ${isDone?'var(--border)':isOverdue?'#fecaca':'var(--border)'};border-radius:14px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;box-shadow:var(--shadow);transition:all 0.2s;opacity:${isDone?'0.65':'1'}"
+    <div style="background:var(--surface);border:1.5px solid ${isDone?'var(--border)':isOverdue?'#fecaca':'var(--border)'};border-radius:14px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;box-shadow:var(--shadow);transition:all 0.2s;opacity:${isDone?'0.65':'1'}"
       onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
 
       <!-- Checkbox -->
@@ -9463,7 +9463,7 @@ function renderZahlungsplan() {
     else if (daysLeft <= 7)       { statusColor = 'var(--warning)'; statusLabel = `In ${daysLeft} Tagen`; }
 
     return `
-    <div style="background:white;border:1px solid var(--border);border-left:4px solid ${statusColor};border-radius:var(--radius);padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-sm)">
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid ${statusColor};border-radius:var(--radius);padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-sm)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
           <span style="font-weight:600;font-size:0.875rem;color:var(--text)">${z.beschr}</span>
@@ -9608,7 +9608,7 @@ function renderMaengel() {
     if (b.status==='Behoben' && a.status!=='Behoben') return -1;
     return (po[a.prio]||1) - (po[b.prio]||1);
   }).map(m => `
-    <div style="background:white;border:1px solid var(--border);border-top:3px solid ${prioColor[m.prio]||'var(--border)'};border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);position:relative">
+    <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid ${prioColor[m.prio]||'var(--border)'};border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);position:relative">
       <div style="position:absolute;top:10px;right:10px;display:flex;gap:4px">
         <button class="action-btn" onclick="editMangel(${m.id})" title="Bearbeiten">✏️</button>
         <button class="action-btn del" onclick="deleteMangel(${m.id})">🗑</button>
