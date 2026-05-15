@@ -2693,6 +2693,11 @@
 
     <!-- Tab: Meilensteine -->
     <div id="plan-sec-meilensteine" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-ghost" style="border-color:#7c3aed;color:#7c3aed;display:flex;align-items:center;gap:6px" onclick="generateKIMeilensteine()">
+          🤖 KI-Zeitplan generieren
+        </button>
+      </div>
       <div class="milestone-list" id="milestone-list"></div>
     </div>
 
@@ -5359,6 +5364,156 @@ function deleteMilestone(id) {
   save(); renderMilestones(); showToast('🗑 Meilenstein gelöscht', 'success');
 }
 
+// ── KI ZEITPLAN GENERATOR ────────────────────────────────────────────────────
+let _kiZeitplanData = null;
+
+async function generateKIMeilensteine(regen = false) {
+  if (window._userPlan !== 'pro') { showUpgradeModal('KI-Zeitplan'); return; }
+
+  openModal('modal-ki-zeitplan');
+  document.getElementById('ki-zeitplan-loading').style.display = 'block';
+  document.getElementById('ki-zeitplan-content').style.display = 'none';
+  document.getElementById('ki-zeitplan-error').style.display   = 'none';
+  document.getElementById('ki-zeitplan-actions').style.display = 'none';
+
+  const s = state.settings;
+  const budgetKats = (state.budgetKat||[]).map(k => `${k.icon||''} ${k.name} (${fmt(k.budget||0)})`).join(', ');
+  const startDate  = s.start || new Date().toISOString().split('T')[0];
+  const endDate    = s.end   || '';
+  const today      = new Date().toISOString().split('T')[0];
+
+  const prompt = `Du bist ein erfahrener Bauprojektmanager in Österreich. Erstelle einen realistischen Projektplan für folgendes Bauprojekt:
+
+Projekttyp: ${s.type || 'Neubau'}
+Projektname: ${s.name || 'Bauprojekt'}
+Gesamtbudget: ${fmt(s.budget || 0)}
+Projektstart: ${startDate}
+${endDate ? `Geplantes Ende: ${endDate}` : ''}
+Budgetkategorien: ${budgetKats || 'nicht definiert'}
+
+Erstelle einen sinnvollen Projektplan mit:
+1. 6-10 wichtige MEILENSTEINE (Schlüsselereignisse/Entscheidungspunkte)
+2. 5-8 BAUPHASEN für den Zeitplan (mit Start- und Enddatum)
+
+Antworte NUR mit validem JSON in diesem Format (kein Text davor oder danach):
+{
+  "meilensteine": [
+    { "name": "Baugenehmigung erhalten", "datum": "YYYY-MM-DD", "text": "Kurze Beschreibung", "budgetKat": "Kategoriename oder leer" }
+  ],
+  "phasen": [
+    { "name": "Planung & Einreichung", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "typ": "phase", "budgetKat": "Kategoriename oder leer" }
+  ]
+}
+
+Verwende realistische Zeiträume basierend auf dem Projekttyp. Alle Daten müssen nach ${startDate} liegen.`;
+
+  try {
+    const resp = await fetch('/api/ki', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) throw new Error('KI-Fehler: ' + resp.status);
+    const result = await resp.json();
+    const raw = result.content?.[0]?.text || result.choices?.[0]?.message?.content || '';
+
+    // Extract JSON from response
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('KI hat kein gültiges JSON zurückgegeben');
+    _kiZeitplanData = JSON.parse(jsonMatch[0]);
+
+    _renderKIZeitplanPreview(_kiZeitplanData, startDate);
+
+    document.getElementById('ki-zeitplan-loading').style.display = 'none';
+    document.getElementById('ki-zeitplan-content').style.display = 'block';
+    document.getElementById('ki-zeitplan-actions').style.display = 'flex';
+
+  } catch(e) {
+    document.getElementById('ki-zeitplan-loading').style.display = 'none';
+    const errEl = document.getElementById('ki-zeitplan-error');
+    errEl.style.display = 'block';
+    errEl.textContent = '⚠️ Fehler: ' + e.message;
+    document.getElementById('ki-zeitplan-actions').style.display = 'flex';
+  }
+}
+
+function _renderKIZeitplanPreview(data, startDate) {
+  // Milestones
+  const msList = document.getElementById('ki-ms-list');
+  msList.innerHTML = (data.meilensteine||[]).map((m, i) => `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 12px;border:1.5px solid var(--border)">
+      <input type="text" value="${m.name.replace(/"/g,'&quot;')}" data-ki-ms-name="${i}"
+        style="background:none;border:none;font-weight:600;font-size:0.875rem;color:var(--text);font-family:'Inter',sans-serif;outline:none;width:100%">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <input type="date" value="${m.datum||''}" data-ki-ms-datum="${i}"
+          style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.78rem;color:var(--text);font-family:'Inter',sans-serif">
+        <span style="font-size:0.72rem;color:var(--text3);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${m.budgetKat||''}">${m.budgetKat ? '📂 '+m.budgetKat : ''}</span>
+      </div>
+    </div>`).join('');
+
+  // Gantt phases
+  const ganttList = document.getElementById('ki-gantt-list');
+  ganttList.innerHTML = (data.phasen||[]).map((p, i) => `
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 12px;border:1.5px solid var(--border)">
+      <input type="text" value="${p.name.replace(/"/g,'&quot;')}" data-ki-gantt-name="${i}"
+        style="background:none;border:none;font-weight:600;font-size:0.875rem;color:var(--text);font-family:'Inter',sans-serif;outline:none;width:100%">
+      <input type="date" value="${p.start||''}" data-ki-gantt-start="${i}"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.78rem;color:var(--text);font-family:'Inter',sans-serif">
+      <input type="date" value="${p.end||''}" data-ki-gantt-end="${i}"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.78rem;color:var(--text);font-family:'Inter',sans-serif">
+    </div>`).join('');
+}
+
+function importKIZeitplan() {
+  if (!_kiZeitplanData) return;
+
+  // Read possibly-edited values from the preview
+  const msList   = document.getElementById('ki-ms-list');
+  const ganttList = document.getElementById('ki-gantt-list');
+
+  // Import milestones
+  (_kiZeitplanData.meilensteine||[]).forEach((m, i) => {
+    const nameEl  = msList.querySelector(`[data-ki-ms-name="${i}"]`);
+    const datumEl = msList.querySelector(`[data-ki-ms-datum="${i}"]`);
+    state.meilensteine.push({
+      id:    Date.now() + Math.random(),
+      name:  nameEl?.value  || m.name,
+      datum: datumEl?.value || m.datum,
+      text:  m.text || '',
+      done:  false
+    });
+  });
+
+  // Import gantt phases
+  (_kiZeitplanData.phasen||[]).forEach((p, i) => {
+    const nameEl  = ganttList.querySelector(`[data-ki-gantt-name="${i}"]`);
+    const startEl = ganttList.querySelector(`[data-ki-gantt-start="${i}"]`);
+    const endEl   = ganttList.querySelector(`[data-ki-gantt-end="${i}"]`);
+    state.gantt.push({
+      id:     Date.now() + Math.random(),
+      name:   nameEl?.value  || p.name,
+      start:  startEl?.value || p.start,
+      end:    endEl?.value   || p.end,
+      type:   'phase',
+      status: 'Offen',
+      notiz:  p.budgetKat ? 'Budgetkategorie: ' + p.budgetKat : ''
+    });
+  });
+
+  save();
+  closeModal('modal-ki-zeitplan');
+  renderMilestones();
+  showPlanTab('meilensteine');
+  showToast(`✅ ${(_kiZeitplanData.meilensteine||[]).length} Meilensteine + ${(_kiZeitplanData.phasen||[]).length} Phasen importiert`, 'success');
+  _kiZeitplanData = null;
+}
+// ── END KI ZEITPLAN ──────────────────────────────────────────────────────────
+
 function renderMilestones() {
   const el = document.getElementById('milestone-list');
   if (state.meilensteine.length === 0) {
@@ -7699,6 +7854,7 @@ function showUpgradeModal(feature) {
   const featureTexts = {
     'KI-Bauberater':      { icon: '🤖', desc: 'Der KI-Bauberater analysiert dein Projekt automatisch und gibt dir konkrete Handlungsempfehlungen – das ist eine Pro-Funktion.' },
     'Mehrere Projekte':   { icon: '📁', desc: 'Mit dem kostenlosen Plan kannst du ein Projekt verwalten. Mit Pro hast du unbegrenzte Projekte.' },
+    'KI-Zeitplan':        { icon: '📅', desc: 'Die KI erstellt automatisch einen kompletten Meilenstein- und Zeitplan für dein Projekt – du musst nur noch Daten anpassen.' },
   };
   const info = featureTexts[feature] || { icon: '⭐', desc: `„${feature}" ist nur im Pro-Abo verfügbar.` };
   document.getElementById('upgrade-modal-icon').textContent   = info.icon;
@@ -10403,6 +10559,38 @@ function exportRechnungenPDF() {
     <div id="datei-kat-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-datei-kat');_dateiKatReject&&_dateiKatReject()">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<!-- KI Zeitplan Modal -->
+<div class="modal-overlay" id="modal-ki-zeitplan">
+  <div class="modal" style="max-width:680px;max-height:88vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 style="margin:0">🤖 KI-Zeitplan Vorschau</h3>
+      <button onclick="closeModal('modal-ki-zeitplan')" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text3)">×</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text3);margin-bottom:16px">Passe Daten und Namen an – dann alles importieren.</p>
+
+    <div id="ki-zeitplan-loading" style="text-align:center;padding:40px;color:var(--text3)">
+      <div style="font-size:2.5rem;margin-bottom:12px">⏳</div>
+      <div style="font-size:0.9rem;font-weight:600">KI erstellt deinen Zeitplan…</div>
+      <div style="font-size:0.78rem;margin-top:6px">Das dauert ~10 Sekunden</div>
+    </div>
+
+    <div id="ki-zeitplan-content" style="display:none;overflow-y:auto;flex:1">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:10px">🏁 Meilensteine</div>
+      <div id="ki-ms-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:10px">📅 Bauphasen (Zeitplan)</div>
+      <div id="ki-gantt-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+    </div>
+
+    <div id="ki-zeitplan-error" style="display:none;padding:16px;background:var(--danger-light);border-radius:10px;color:var(--danger);font-size:0.85rem"></div>
+
+    <div id="ki-zeitplan-actions" style="display:none;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="closeModal('modal-ki-zeitplan')">Abbrechen</button>
+      <button class="btn btn-ghost" style="border-color:#7c3aed;color:#7c3aed" onclick="generateKIMeilensteine(true)">🔄 Neu generieren</button>
+      <button class="btn btn-primary" onclick="importKIZeitplan()">✅ Importieren</button>
     </div>
   </div>
 </div>
