@@ -8706,8 +8706,8 @@ function _setupRealtimeSync() {
     }, () => {
       if (_realtimeLoading) return; // avoid loop when we ourselves triggered the update
       _realtimeLoading = true;
-      // Cancel any pending local sync so we don't race with the incoming cloud data
-      clearTimeout(syncTimeout);
+      // NOTE: do NOT cancel syncTimeout here — local changes (e.g. time field)
+      // must still reach the cloud even when a realtime event fires simultaneously
       loadFromCloud().then(() => {
         applyModuleVisibility();
         const active = document.querySelector('.page.active');
@@ -8887,12 +8887,16 @@ async function loadFromCloud() {
         }
       }
 
-      // If merge added local-only items, push them to cloud (with small debounce to avoid loops)
-      const _countItems = (arr) => (arr || []).reduce((s, p) => {
-        return s + ['kosten','aufgaben','notizen','maengel','angebote','zahlungsplan','kontakte','dokumentation']
-          .reduce((n, f) => n + (p[f]?.length || 0), 0);
-      }, 0);
-      if (_countItems(finalProjects) > _countItems(data.daten.projects)) {
+      // If merge result differs from cloud (new items OR updated fields), sync back
+      const _fingerprint = (arr) => JSON.stringify(
+        (arr || []).map(p => ({
+          id: p.id,
+          aufgaben: (p.aufgaben||[]).map(t=>({id:t.id,time:t.time,status:t.status,datum:t.datum,name:t.name})),
+          kosten:   (p.kosten||[]).map(k=>k.id),
+          notizen:  (p.notizen||[]).map(n=>n.id),
+        }))
+      );
+      if (_fingerprint(finalProjects) !== _fingerprint(data.daten.projects)) {
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(syncToCloud, 800);
       }
