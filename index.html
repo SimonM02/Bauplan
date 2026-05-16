@@ -6000,7 +6000,8 @@ function renderTasks() {
       </div>
 
       <!-- Actions -->
-      <div style="display:flex;gap:4px;flex-shrink:0">
+      <div style="display:flex;gap:4px;flex-shrink:0;align-items:flex-start">
+        ${isDone ? `<button class="btn btn-ghost" onclick="toggleTask(${t.id})" style="font-size:0.72rem;padding:4px 10px;white-space:nowrap" title="Wieder öffnen">↩ Öffnen</button>` : ''}
         <button class="action-btn" onclick="editTask(${t.id})" title="Bearbeiten">✏️</button>
         <button class="action-btn del" onclick="deleteTask(${t.id})" title="Löschen">🗑</button>
       </div>
@@ -8639,10 +8640,28 @@ function _saveLocalBackup(projectsData) {
 }
 
 // ── Merge helpers ─────────────────────────────────────────────────────────────
-// Merge two item arrays by id: cloud items win for conflicts, local-only items appended
+// Merge two item arrays by id: for same ID merge fields (non-empty local fills gaps in cloud)
 function _mergeArr(local = [], cloud = []) {
   const cloudMap = new Map((cloud || []).map(i => [i.id, i]));
-  const result = [...(cloud || [])];
+  const localMap = new Map((local || []).map(i => [i.id, i]));
+  const result = [];
+  // For each cloud item: merge with local so no fields are lost
+  for (const cItem of (cloud || [])) {
+    const lItem = localMap.get(cItem.id);
+    if (lItem) {
+      const merged = { ...cItem };
+      for (const key of Object.keys(lItem)) {
+        // Local fills any field that cloud left empty
+        if (merged[key] === undefined || merged[key] === null || merged[key] === '') {
+          merged[key] = lItem[key];
+        }
+      }
+      result.push(merged);
+    } else {
+      result.push(cItem);
+    }
+  }
+  // Add local-only items not in cloud
   for (const item of (local || [])) {
     if (item?.id !== undefined && !cloudMap.has(item.id)) result.push(item);
   }
