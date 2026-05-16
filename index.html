@@ -2582,6 +2582,22 @@
           </div>
         </div>
 
+        <!-- Sync -->
+        <div class="table-wrap" style="margin-bottom:16px">
+          <div class="table-header"><div class="table-title">🔄 Synchronisation</div></div>
+          <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:0.82rem;color:var(--text2);line-height:1.6">
+              Daten werden automatisch zwischen allen Geräten synchronisiert.<br>
+              <span style="color:var(--text3);font-size:0.75rem">Wichtig: Die App muss auf allen Geräten mit <strong>demselben Konto</strong> eingeloggt sein.</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="forceSyncFromCloud()" class="btn btn-ghost" style="font-size:0.8rem">☁️ Jetzt von Cloud laden</button>
+              <button onclick="forceSyncToCloud()" class="btn btn-ghost" style="font-size:0.8rem">⬆️ Jetzt zur Cloud speichern</button>
+            </div>
+            <div id="sync-info-output" style="display:none;font-size:0.73rem;font-family:monospace;background:var(--surface2);border-radius:8px;padding:8px 12px;line-height:1.7;white-space:pre-wrap;color:var(--text2)"></div>
+          </div>
+        </div>
+
         <!-- Konto -->
         <div class="table-wrap" style="margin-bottom:16px">
           <div class="table-header"><div class="table-title">Mitteilungen</div></div>
@@ -3294,7 +3310,7 @@
   <div class="modal">
     <h3 id="t-modal-title">Aufgabe hinzufügen</h3>
     <input type="hidden" id="t-edit-id">
-    <div class="form-row"><label>Aufgabe</label><input type="text" id="t-name" list="t-name-list" placeholder="z.B. Angebot einholen"><datalist id="t-name-list"></datalist></div>
+    <div class="form-row"><label>Aufgabe</label><input type="text" id="t-name" autocomplete="off" placeholder="z.B. Angebot einholen"></div>
     <div class="form-row"><label>Priorität</label>
       <select id="t-prio"><option>Hoch</option><option>Mittel</option><option>Niedrig</option></select>
     </div>
@@ -5119,6 +5135,43 @@ function loadNotificationStatus() {
   }
 }
 
+async function forceSyncFromCloud() {
+  const out = document.getElementById('sync-info-output');
+  if (out) { out.style.display = 'block'; out.textContent = '⏳ Lade Daten von Cloud…'; }
+  try {
+    await loadFromCloud();
+    applyModuleVisibility();
+    const active = document.querySelector('.page.active');
+    if (active) {
+      const pid = active.id.replace('page-', '');
+      if (pid === 'aufgaben') renderTasks();
+      else if (pid === 'kosten') renderKosten();
+      else if (pid === 'dashboard') renderDashboard();
+    }
+    const ts = localStorage.getItem('bauplan_updated_at') || '–';
+    const count = projects.reduce((s,p)=>s+(p.aufgaben?.length||0),0);
+    if (out) out.textContent = `✅ Geladen!\nProjekte: ${projects.length}\nAufgaben gesamt: ${count}\nLetztes Update: ${ts ? new Date(ts).toLocaleString('de') : '–'}\nKonto: ${currentUser?.email||'–'}`;
+    showToast('✅ Cloud-Daten geladen', 'success');
+  } catch(e) {
+    if (out) out.textContent = '❌ Fehler: ' + e.message;
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+async function forceSyncToCloud() {
+  const out = document.getElementById('sync-info-output');
+  if (out) { out.style.display = 'block'; out.textContent = '⏳ Speichere zur Cloud…'; }
+  try {
+    await syncToCloud();
+    const count = projects.reduce((s,p)=>s+(p.aufgaben?.length||0),0);
+    if (out) out.textContent = `✅ Gespeichert!\nProjekte: ${projects.length}\nAufgaben gesamt: ${count}\nKonto: ${currentUser?.email||'–'}`;
+    showToast('✅ Zur Cloud gespeichert', 'success');
+  } catch(e) {
+    if (out) out.textContent = '❌ Fehler: ' + e.message;
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
 function toggleSidebar() {
   const collapsed = document.body.classList.toggle('sidebar-collapsed');
   localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
@@ -5140,6 +5193,11 @@ function toggleDarkMode() {
   const on = document.body.classList.toggle('dark-mode');
   localStorage.setItem('darkMode', on ? '1' : '0');
   _updateDarkModeToggle(on);
+  // Save to cloud so it syncs across devices/PWA contexts
+  if (currentUser) {
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(syncToCloud, 500);
+  }
 }
 
 function showDsgvoIfNeeded() {
@@ -8703,7 +8761,13 @@ async function syncToCloud() {
     const payload = {
       user_id: currentUser.id,
       typ: 'all_projects',
-      daten: { projects: finalProjects, currentProjectId, onboarded: true, updated_at: ts },
+      daten: {
+        projects: finalProjects,
+        currentProjectId,
+        onboarded: true,
+        updated_at: ts,
+        prefs: { darkMode: document.body.classList.contains('dark-mode') }
+      },
       updated_at: ts
     };
 
@@ -8792,6 +8856,17 @@ async function loadFromCloud() {
       localStorage.setItem('bauplan_current',    String(currentProjectId));
       localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
       localStorage.setItem('bauplan_updated_at', cloudTs);
+
+      // Apply cloud preferences (darkMode syncs across devices)
+      if (data.daten?.prefs?.darkMode !== undefined) {
+        const cloudDark = data.daten.prefs.darkMode;
+        const localDark = document.body.classList.contains('dark-mode');
+        if (cloudDark !== localDark) {
+          document.body.classList.toggle('dark-mode', cloudDark);
+          localStorage.setItem('darkMode', cloudDark ? '1' : '0');
+          _updateDarkModeToggle(cloudDark);
+        }
+      }
 
       // If merge added local-only items, push them to cloud (with small debounce to avoid loops)
       const _countItems = (arr) => (arr || []).reduce((s, p) => {
