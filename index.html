@@ -10464,7 +10464,7 @@ async function runPushDiag() {
   if (!token) { lines.push(err('Kein Session-Token – bitte einloggen')); out.textContent = lines.join('\n'); return; }
   lines.push(ok('Session-Token: vorhanden'));
 
-  // 8 API call
+  // 8 API /push-subscribe
   try {
     const res = await fetch('/api/push-subscribe', {
       method: 'POST',
@@ -10472,16 +10472,52 @@ async function runPushDiag() {
       body: JSON.stringify({ subscription: sub.toJSON() })
     });
     if (res.ok) {
-      lines.push(ok('API /api/push-subscribe: gespeichert ✓'));
-      lines.push('');
-      lines.push('🎉 Alles OK! Gerät ist für Hintergrund-Push registriert.');
-      showToast('📱 Push-Registrierung erfolgreich', 'success');
+      lines.push(ok('API /push-subscribe: Gerät gespeichert ✓'));
     } else {
       const txt = await res.text();
-      lines.push(err(`API /api/push-subscribe: HTTP ${res.status}`));
-      lines.push('   ' + txt.slice(0, 200));
+      lines.push(err(`API /push-subscribe: HTTP ${res.status} → ${txt.slice(0,120)}`));
+      if (res.status === 500 && txt.includes('push_subscriptions')) {
+        lines.push(wrn('  → Supabase-Tabelle "push_subscriptions" fehlt noch!'));
+        lines.push(wrn('  → SQL aus den Setup-Anweisungen in Supabase ausführen'));
+      }
     }
-  } catch(e) { lines.push(err('API fetch: ' + e.message)); }
+  } catch(e) { lines.push(err('API /push-subscribe fetch: ' + e.message)); }
+
+  // 9 Check scheduled_notifications table + pending items
+  lines.push('');
+  lines.push('--- Geplante Benachrichtigungen ---');
+  try {
+    const SUPA = 'https://savrxykygruzyngttekl.supabase.co';
+    const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdnJ4eWt5Z3J1enluZ3R0ZWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MTU4NTEsImV4cCI6MjA2MjI5MTg1MX0.P0Uu2NnSNDVpV1pM5hMHJqASFVjUhp4HJNVqHhI7cyg';
+    const hdrs = { Authorization: `Bearer ${token}`, apikey: anonKey };
+    const nRes = await fetch(`${SUPA}/rest/v1/scheduled_notifications?user_id=eq.${currentUser?.id}&sent=eq.false&select=notif_id,scheduled_for,title&order=scheduled_for.asc&limit=5`, { headers: hdrs });
+    if (nRes.status === 404 || nRes.status === 400) {
+      const t = await nRes.text();
+      lines.push(err('Tabelle "scheduled_notifications" existiert nicht!'));
+      lines.push(wrn('→ SQL-Setup in Supabase SQL Editor ausführen (aus Setup-Anleitung)'));
+    } else if (nRes.ok) {
+      const items = await nRes.json();
+      if (items.length === 0) {
+        lines.push(wrn('Keine geplanten Benachrichtigungen in DB'));
+        lines.push(wrn('→ Aufgabe speichern damit Sync läuft, oder App neu öffnen'));
+      } else {
+        lines.push(ok(`${items.length} Benachrichtigung(en) in DB:`));
+        items.forEach(n => lines.push(`   📅 ${n.scheduled_for?.slice(0,16).replace('T',' ')} – ${n.title}`));
+      }
+    } else {
+      lines.push(err('scheduled_notifications Abfrage: HTTP ' + nRes.status));
+    }
+  } catch(e) { lines.push(err('DB-Check: ' + e.message)); }
+
+  // 10 Local pending timers
+  lines.push('');
+  lines.push('--- Lokale Timer (nur wenn App offen) ---');
+  const timerCount = Object.keys(_notifTimers).length;
+  if (timerCount > 0) {
+    lines.push(ok(`${timerCount} aktive setTimeout-Timer`));
+  } else {
+    lines.push(wrn('Keine lokalen Timer aktiv → App war geschlossen oder keine anstehenden Termine'));
+  }
 
   out.textContent = lines.join('\n');
 }
@@ -10614,7 +10650,7 @@ async function _syncPushSchedule(notifications) {
       headers: { ...hdrs, Prefer: 'resolution=merge-duplicates' },
       body: JSON.stringify(rows)
     });
-  } catch(e) { console.warn('Push schedule sync failed:', e); }
+  } catch(e) { console.warn('Push schedule sync failed:', e); /* silent — don't bother user with bg errors */ }
 }
 
 // Alias for backward compat
