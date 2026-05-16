@@ -10513,11 +10513,30 @@ async function runPushDiag() {
   lines.push('');
   lines.push('--- Lokale Timer (nur wenn App offen) ---');
   const timerCount = Object.keys(_notifTimers).length;
-  if (timerCount > 0) {
-    lines.push(ok(`${timerCount} aktive setTimeout-Timer`));
-  } else {
-    lines.push(wrn('Keine lokalen Timer aktiv → App war geschlossen oder keine anstehenden Termine'));
-  }
+  lines.push(timerCount > 0 ? ok(`${timerCount} aktive setTimeout-Timer`) : wrn('Keine lokalen Timer → App war geschlossen oder keine Termine innerhalb 14 Tage'));
+
+  // 11 Test catch-up (fire overdue now)
+  lines.push('');
+  lines.push('--- Catch-up Test ---');
+  try {
+    const SUPA2 = 'https://savrxykygruzyngttekl.supabase.co';
+    const aKey2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdnJ4eWt5Z3J1enluZ3R0ZWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MTU4NTEsImV4cCI6MjA2MjI5MTg1MX0.P0Uu2NnSNDVpV1pM5hMHJqASFVjUhp4HJNVqHhI7cyg';
+    const h2 = { Authorization: `Bearer ${token}`, apikey: aKey2 };
+    const now2 = new Date().toISOString();
+    const since2 = new Date(Date.now() - 24*3600000).toISOString();
+    const r2 = await fetch(`${SUPA2}/rest/v1/scheduled_notifications?user_id=eq.${currentUser?.id}&sent=eq.false&scheduled_for=lte.${now2}&scheduled_for=gte.${since2}&select=notif_id,scheduled_for,title`, { headers: h2 });
+    if (r2.ok) {
+      const overdue = await r2.json();
+      if (overdue.length > 0) {
+        lines.push(wrn(`${overdue.length} überfällige Benachrichtigung(en) – werden jetzt ausgelöst:`));
+        overdue.forEach(n => lines.push(`   ⏰ ${n.scheduled_for?.slice(0,16).replace('T',' ')} – ${n.title}`));
+        lines.push(ok('→ Catch-up wird ausgeführt…'));
+        _fireOverdueNotifications();
+      } else {
+        lines.push(ok('Keine überfälligen Benachrichtigungen'));
+      }
+    }
+  } catch(e) { lines.push(wrn('Catch-up Check: ' + e.message)); }
 
   out.textContent = lines.join('\n');
 }
@@ -10653,6 +10672,49 @@ async function _syncPushSchedule(notifications) {
   } catch(e) { console.warn('Push schedule sync failed:', e); /* silent — don't bother user with bg errors */ }
 }
 
+// ── Catch-up: fire any overdue notifications stored in DB ──────────────────
+// Runs on every app open/foreground — catches what the cron might have missed.
+// Works even on Vercel Hobby plan (no cron needed).
+async function _fireOverdueNotifications() {
+  if (!currentUser || Notification.permission !== 'granted') return;
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const { data: { session } } = await supa.auth.getSession();
+    if (!session?.access_token) return;
+    const SUPA = 'https://savrxykygruzyngttekl.supabase.co';
+    const hdrs = {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhdnJ4eWt5Z3J1enluZ3R0ZWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MTU4NTEsImV4cCI6MjA2MjI5MTg1MX0.P0Uu2NnSNDVpV1pM5hMHJqASFVjUhp4HJNVqHhI7cyg',
+      'Content-Type': 'application/json'
+    };
+    const now = new Date().toISOString();
+    // Fetch all unsent notifications whose time has passed (up to 24h ago to avoid old noise)
+    const since = new Date(Date.now() - 24 * 3600000).toISOString();
+    const res = await fetch(
+      `${SUPA}/rest/v1/scheduled_notifications?user_id=eq.${currentUser.id}&sent=eq.false&scheduled_for=lte.${now}&scheduled_for=gte.${since}&select=*&order=scheduled_for.asc`,
+      { headers: hdrs }
+    );
+    if (!res.ok) return;
+    const items = await res.json();
+    if (!Array.isArray(items) || !items.length) return;
+
+    // Show each notification with slight delay between them
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      setTimeout(async () => {
+        await _showNotification(item.title, item.body || '', item.notif_id);
+        // Mark as sent in DB
+        const patchHdrs = { ...hdrs };
+        fetch(
+          `${SUPA}/rest/v1/scheduled_notifications?user_id=eq.${currentUser.id}&notif_id=eq.${encodeURIComponent(item.notif_id)}`,
+          { method: 'PATCH', headers: patchHdrs, body: JSON.stringify({ sent: true }) }
+        ).catch(() => {});
+      }, i * 1200);
+    }
+    console.log(`[Buildora] Fired ${items.length} overdue notification(s)`);
+  } catch(e) { console.warn('_fireOverdueNotifications failed:', e); }
+}
+
 // Alias for backward compat
 const scheduleTaskReminders = scheduleAllReminders;
 
@@ -10714,19 +10776,24 @@ async function _syncAndRender() {
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
     scheduleAllReminders();
+    _fireOverdueNotifications(); // catch anything the cron missed
     await _syncAndRender();
   }
 });
 
 // PWA on iOS/Android: 'focus' fires when app comes to foreground from homescreen
 window.addEventListener('focus', async () => {
+  _fireOverdueNotifications(); // catch anything the cron missed
   await _syncAndRender();
 });
 
-// Init on load — SW first, then schedule after ready
+// Init on load — SW first, then schedule + catch up after ready
 registerSW().then(() => {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(() => scheduleAllReminders());
+    navigator.serviceWorker.ready.then(() => {
+      scheduleAllReminders();
+      setTimeout(_fireOverdueNotifications, 3000); // slight delay so auth is ready
+    });
   }
 });
 
