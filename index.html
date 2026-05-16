@@ -8557,6 +8557,8 @@ async function onAuthSuccess(user, isNewUser = false) {
   }
   // Load subscription plan (non-blocking)
   loadUserPlan();
+  // Start real-time sync so changes on other devices appear instantly
+  _setupRealtimeSync();
 }
 
 // ── CLOUD SYNC ──────────────────────────────────
@@ -8578,6 +8580,75 @@ function _saveLocalBackup(projectsData) {
   } catch(e) { /* storage full – ignore */ }
 }
 
+// ── Merge helpers ─────────────────────────────────────────────────────────────
+// Merge two item arrays by id: cloud items win for conflicts, local-only items appended
+function _mergeArr(local = [], cloud = []) {
+  const cloudMap = new Map((cloud || []).map(i => [i.id, i]));
+  const result = [...(cloud || [])];
+  for (const item of (local || [])) {
+    if (item?.id !== undefined && !cloudMap.has(item.id)) result.push(item);
+  }
+  return result;
+}
+
+// Merge two project lists: all array fields merged by id
+function _mergeProjects(localProjects, cloudProjects) {
+  if (!Array.isArray(cloudProjects) || cloudProjects.length === 0) return localProjects || [];
+  if (!Array.isArray(localProjects) || localProjects.length === 0) return cloudProjects;
+  const ARRS = ['kosten','aufgaben','dokumentation','budgetKat','notizen','maengel',
+                'angebote','zahlungsplan','kontakte','gewerke','personen','dokumente','fotos'];
+  const result = cloudProjects.map(cp => {
+    const lp = localProjects.find(p => p.id === cp.id);
+    if (!lp) return cp;
+    const merged = { ...cp };
+    for (const f of ARRS) {
+      if (Array.isArray(lp[f]) || Array.isArray(cp[f])) {
+        merged[f] = _mergeArr(lp[f], cp[f]);
+      }
+    }
+    return merged;
+  });
+  // Add projects that only exist locally
+  for (const lp of localProjects) {
+    if (!cloudProjects.find(cp => cp.id === lp.id)) result.push(lp);
+  }
+  return result;
+}
+
+// ── Supabase Realtime ──────────────────────────────────────────────────────────
+let _realtimeChannel = null;
+function _setupRealtimeSync() {
+  if (!currentUser) return;
+  if (_realtimeChannel) { supa.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  _realtimeChannel = supa
+    .channel('proj-' + currentUser.id)
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'projektdaten',
+      filter: 'user_id=eq.' + currentUser.id
+    }, () => {
+      // Another device saved — reload silently
+      loadFromCloud().then(() => {
+        applyModuleVisibility();
+        const active = document.querySelector('.page.active');
+        if (!active) return;
+        const pid = active.id.replace('page-', '');
+        if (pid === 'dashboard') renderDashboard();
+        else if (pid === 'aufgaben') renderTasks();
+        else if (pid === 'kosten') renderKosten();
+        else if (pid === 'budget') renderBudget();
+        else if (pid === 'dokumente') { renderNotizen(); renderDokumente(); }
+        else if (pid === 'angebote') renderAngebote();
+        else if (pid === 'zahlungsplan') renderZahlungsplan();
+        else if (pid === 'kontakte') renderKontakte();
+        else if (pid === 'maengel') renderMaengel();
+        else if (pid === 'fotos') renderFotos();
+        else if (pid === 'zeitplan') renderZeitplan?.();
+      });
+    })
+    .subscribe();
+}
+
+// ── Cloud sync ─────────────────────────────────────────────────────────────────
 async function syncToCloud() {
   if (!currentUser) return;
   try {
@@ -8594,21 +8665,9 @@ async function syncToCloud() {
     if (hasRealData) _saveLocalBackup(projects);
 
     const ts = new Date().toISOString();
-    localStorage.setItem('bauplan_updated_at', ts); // keep local timestamp in sync
+    localStorage.setItem('bauplan_updated_at', ts);
 
-    const payload = {
-      user_id: currentUser.id,
-      typ: 'all_projects',
-      daten: {
-        projects,
-        currentProjectId,
-        onboarded: true,
-        updated_at: ts
-      },
-      updated_at: ts
-    };
-
-    // Check if row exists — also fetch current cloud data to check before overwriting
+    // Check if row exists — fetch current cloud data to MERGE before overwriting
     const { data: existing } = await supa.from('projektdaten')
       .select('id, daten').eq('user_id', currentUser.id).maybeSingle();
 
@@ -8623,6 +8682,24 @@ async function syncToCloud() {
       _showRecoveryBanner();
       return;
     }
+
+    // ── MERGE: combine local + cloud so no data from either device is lost ──
+    let finalProjects = projects;
+    if (existing?.daten?.projects && hasRealData) {
+      finalProjects = _mergeProjects(projects, existing.daten.projects);
+      projects = finalProjects;
+      // Also update in-memory state and localStorage with merged result
+      const merged = finalProjects.find(p => p.id === currentProjectId);
+      if (merged) { state = JSON.parse(JSON.stringify(merged)); }
+      localStorage.setItem('bauplan_projects', JSON.stringify(finalProjects));
+    }
+
+    const payload = {
+      user_id: currentUser.id,
+      typ: 'all_projects',
+      daten: { projects: finalProjects, currentProjectId, onboarded: true, updated_at: ts },
+      updated_at: ts
+    };
 
     if (existing) {
       const { error } = await supa.from('projektdaten').update({
