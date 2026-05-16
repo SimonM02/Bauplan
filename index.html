@@ -8617,6 +8617,7 @@ function _mergeProjects(localProjects, cloudProjects) {
 
 // ── Supabase Realtime ──────────────────────────────────────────────────────────
 let _realtimeChannel = null;
+let _realtimeLoading = false; // prevents reload loop when we sync back after merge
 function _setupRealtimeSync() {
   if (!currentUser) return;
   if (_realtimeChannel) { supa.removeChannel(_realtimeChannel); _realtimeChannel = null; }
@@ -8626,23 +8627,28 @@ function _setupRealtimeSync() {
       event: 'UPDATE', schema: 'public', table: 'projektdaten',
       filter: 'user_id=eq.' + currentUser.id
     }, () => {
-      // Another device saved — reload silently
+      if (_realtimeLoading) return; // avoid loop when we ourselves triggered the update
+      _realtimeLoading = true;
+      // Cancel any pending local sync so we don't race with the incoming cloud data
+      clearTimeout(syncTimeout);
       loadFromCloud().then(() => {
         applyModuleVisibility();
         const active = document.querySelector('.page.active');
-        if (!active) return;
-        const pid = active.id.replace('page-', '');
-        if (pid === 'dashboard') renderDashboard();
-        else if (pid === 'aufgaben') renderTasks();
-        else if (pid === 'kosten') renderKosten();
-        else if (pid === 'budget') renderBudget();
-        else if (pid === 'dokumente') { renderNotizen(); renderDokumente(); }
-        else if (pid === 'angebote') renderAngebote();
-        else if (pid === 'zahlungsplan') renderZahlungsplan();
-        else if (pid === 'kontakte') renderKontakte();
-        else if (pid === 'maengel') renderMaengel();
-        else if (pid === 'fotos') renderFotos();
-        else if (pid === 'zeitplan') renderZeitplan?.();
+        if (active) {
+          const pid = active.id.replace('page-', '');
+          if (pid === 'dashboard') renderDashboard();
+          else if (pid === 'aufgaben') renderTasks();
+          else if (pid === 'kosten') renderKosten();
+          else if (pid === 'budget') renderBudget();
+          else if (pid === 'dokumente') { renderNotizen(); renderDokumente(); }
+          else if (pid === 'angebote') renderAngebote();
+          else if (pid === 'zahlungsplan') renderZahlungsplan();
+          else if (pid === 'kontakte') renderKontakte();
+          else if (pid === 'maengel') renderMaengel();
+          else if (pid === 'fotos') renderFotos();
+          else if (pid === 'zeitplan') renderZeitplan?.();
+        }
+        setTimeout(() => { _realtimeLoading = false; }, 2000); // cooldown
       });
     })
     .subscribe();
@@ -8764,18 +8770,39 @@ async function loadFromCloud() {
 
     const cloudHasData = _hasData(data?.daten?.projects);
 
-    // ── CLOUD WINS (always, when it has data) ──────────────────────────────────
+    // ── CLOUD + LOCAL MERGE (cloud wins for conflicts, local adds missing items) ─
     if (cloudHasData) {
-      projects = data.daten.projects;
+      const localOwner    = localStorage.getItem('bauplan_user_id') || '';
+      const rawLocal      = localStorage.getItem('bauplan_projects');
+      const localProjects = rawLocal ? (() => { try { return JSON.parse(rawLocal); } catch(e) { return []; } })() : [];
+
+      // Merge: cloud is the base, local items not in cloud are added
+      let finalProjects = data.daten.projects;
+      if (localOwner === currentUser?.id && Array.isArray(localProjects) && localProjects.length > 0) {
+        finalProjects = _mergeProjects(localProjects, data.daten.projects);
+      }
+
+      projects = finalProjects;
       const savedId = data.daten.currentProjectId;
       const found = savedId && projects.find(p => p.id === savedId);
       currentProjectId = found ? found.id : projects[0].id;
       loadProject(currentProjectId, false);
       const cloudTs = data?.daten?.updated_at || '';
-      localStorage.setItem('bauplan_projects',   JSON.stringify(projects));
+      localStorage.setItem('bauplan_projects',   JSON.stringify(finalProjects));
       localStorage.setItem('bauplan_current',    String(currentProjectId));
       localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
       localStorage.setItem('bauplan_updated_at', cloudTs);
+
+      // If merge added local-only items, push them to cloud (with small debounce to avoid loops)
+      const _countItems = (arr) => (arr || []).reduce((s, p) => {
+        return s + ['kosten','aufgaben','notizen','maengel','angebote','zahlungsplan','kontakte','dokumentation']
+          .reduce((n, f) => n + (p[f]?.length || 0), 0);
+      }, 0);
+      if (_countItems(finalProjects) > _countItems(data.daten.projects)) {
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(syncToCloud, 800);
+      }
+
       return data.daten;
     }
 
