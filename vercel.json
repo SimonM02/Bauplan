@@ -13,10 +13,5 @@
       ]
     }
   ],
-  "crons": [
-    {
-      "path": "/api/push-cron",
-      "schedule": "* * * * *"
-    }
-  ]
+  "crons": []
 }
