@@ -3785,7 +3785,19 @@ let state = EMPTY_PROJECT(); // active project data (alias)
 
 const PROJECT_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#64748b'];
 
+// Stamp _updatedAt on any item in an array that doesn't already have one
+function _stampUpdatedAt(arr) {
+  if (!Array.isArray(arr)) return arr;
+  const now = Date.now();
+  return arr.map(item => item?._updatedAt ? item : { ...item, _updatedAt: now });
+}
+
 function saveAll() {
+  // Stamp _updatedAt on all items so the merge always knows which version is newer
+  const STAMP_FIELDS = ['kosten','aufgaben','notizen','maengel','angebote','zahlungen',
+                        'kontakte','dokumentation','meilensteine','wartungen','tagebuch'];
+  STAMP_FIELDS.forEach(f => { if (Array.isArray(state[f])) state[f] = _stampUpdatedAt(state[f]); });
+
   const idx = projects.findIndex(p => p.id === currentProjectId);
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
   const ts = new Date().toISOString();
@@ -3796,7 +3808,7 @@ function saveAll() {
   if (currentUser) {
     setSyncStatus('pending');
     clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(syncToCloud, 500); // reduced from 2000ms
+    syncTimeout = setTimeout(syncToCloud, 500);
   }
 }
 
@@ -4458,7 +4470,8 @@ function saveKosten() {
     anbieter: document.getElementById('k-anbieter').value,
     skontoProz: parseFloat(document.getElementById('k-skonto-proz').value) || 0,
     skontoBis:  document.getElementById('k-skonto-bis').value || '',
-    aiScanned: editId ? (state.kosten.find(k => k.id === editId)?.aiScanned || false) : false
+    aiScanned:  editId ? (state.kosten.find(k => k.id === editId)?.aiScanned || false) : false,
+    _updatedAt: Date.now()
   };
 
   if (editId) {
@@ -5799,14 +5812,15 @@ function saveTask() {
   const name = document.getElementById('t-name').value.trim();
   if (!name) { showToast('⚠️ Bitte eine Aufgabe eingeben', 'error'); return; }
   const item = {
-    id:     editId || Date.now(),
+    id:         editId || Date.now(),
     name,
-    prio:   document.getElementById('t-prio').value,
-    datum:  document.getElementById('t-datum').value || '',
-    time:   document.getElementById('t-time')?.value || '',
-    person: document.getElementById('t-person').value.trim() || '',
-    notiz:  document.getElementById('t-notiz').value.trim() || '',
-    status: editId ? (state.aufgaben.find(t => t.id === editId)?.status || 'Offen') : 'Offen'
+    prio:       document.getElementById('t-prio').value,
+    datum:      document.getElementById('t-datum').value || '',
+    time:       document.getElementById('t-time')?.value || '',
+    person:     document.getElementById('t-person').value.trim() || '',
+    notiz:      document.getElementById('t-notiz').value.trim() || '',
+    status:     editId ? (state.aufgaben.find(t => t.id === editId)?.status || 'Offen') : 'Offen',
+    _updatedAt: Date.now()
   };
   if (editId) {
     const idx = state.aufgaben.findIndex(t => t.id === editId);
@@ -5873,6 +5887,7 @@ function toggleTask(id) {
   const t = state.aufgaben.find(t => t.id === id);
   if (t) {
     t.status = t.status === 'Erledigt' ? 'Offen' : 'Erledigt';
+    t._updatedAt = Date.now();
     _syncTaskNotiz(t);
     showToast(t.status === 'Erledigt' ? '✅ Aufgabe erledigt' : '↩️ Aufgabe wieder offen', 'success');
   }
@@ -8640,23 +8655,32 @@ function _saveLocalBackup(projectsData) {
 }
 
 // ── Merge helpers ─────────────────────────────────────────────────────────────
-// Merge two item arrays by id: for same ID merge fields (non-empty local fills gaps in cloud)
+// Merge two item arrays by id.
+// If both versions have _updatedAt → newer wins entirely.
+// If no timestamps → local fills empty cloud fields (safe fallback).
 function _mergeArr(local = [], cloud = []) {
   const cloudMap = new Map((cloud || []).map(i => [i.id, i]));
   const localMap = new Map((local || []).map(i => [i.id, i]));
   const result = [];
-  // For each cloud item: merge with local so no fields are lost
   for (const cItem of (cloud || [])) {
     const lItem = localMap.get(cItem.id);
     if (lItem) {
-      const merged = { ...cItem };
-      for (const key of Object.keys(lItem)) {
-        // Local fills any field that cloud left empty
-        if (merged[key] === undefined || merged[key] === null || merged[key] === '') {
-          merged[key] = lItem[key];
+      const cTime = cItem._updatedAt || 0;
+      const lTime = lItem._updatedAt || 0;
+      if (lTime > cTime) {
+        result.push(lItem); // local is newer → use local
+      } else if (cTime > lTime) {
+        result.push(cItem); // cloud is newer → use cloud
+      } else {
+        // No timestamps: cloud base + local fills empty fields
+        const merged = { ...cItem };
+        for (const key of Object.keys(lItem)) {
+          if (merged[key] === undefined || merged[key] === null || merged[key] === '') {
+            merged[key] = lItem[key];
+          }
         }
+        result.push(merged);
       }
-      result.push(merged);
     } else {
       result.push(cItem);
     }
