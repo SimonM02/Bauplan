@@ -2152,6 +2152,9 @@
     </div>
 
     <div class="nav-section" data-module="gebaeude">Gebäude</div>
+    <div class="nav-item" onclick="showPage('grundrisse')" data-module="grundrisse" data-page="grundrisse">
+      <span class="icon">🗺️</span><span>Grundrisse</span>
+    </div>
     <div class="nav-item" onclick="showPage('dokumentation')" data-module="dokumentation" data-page="dokumentation">
       <span class="icon">📐</span><span>Dokumentation</span>
     </div>
@@ -2881,6 +2884,22 @@
         <div id="cost-stats" style="display:flex;flex-direction:column;gap:12px;margin-top:12px"></div>
       </div>
     </div>
+  </div>
+
+  <!-- GRUNDRISSE -->
+  <div class="page" id="page-grundrisse">
+    <div class="page-header">
+      <div><h2>Grundrisse</h2><p>Pläne mit Markierungen, Leitungen &amp; Notizen</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="openAddGrundrissModal()">+ Stockwerk hinzufügen</button>
+      </div>
+    </div>
+
+    <!-- Stockwerk Tabs -->
+    <div id="gr-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px"></div>
+
+    <!-- Plan Bereich -->
+    <div id="gr-content"></div>
   </div>
 
   <!-- DOKUMENTATION -->
@@ -3653,6 +3672,67 @@
   </div>
 </div>
 
+<!-- ── GRUNDRISS: Stockwerk hinzufügen ── -->
+<div class="modal-overlay" id="modal-grundriss-add">
+  <div class="modal">
+    <h3 id="gr-add-title">Stockwerk hinzufügen</h3>
+    <input type="hidden" id="gr-edit-id">
+    <div class="form-row"><label>Bezeichnung</label>
+      <input type="text" id="gr-name" placeholder="z.B. Erdgeschoss, Obergeschoss, Keller…">
+    </div>
+    <div class="form-row"><label>Grundriss-Plan (Foto/Scan)</label>
+      <input type="file" id="gr-bild-input" accept="image/*" onchange="previewGrundrissImage(this)">
+      <div id="gr-bild-preview" style="margin-top:8px;display:none">
+        <img id="gr-bild-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:0.78rem;color:var(--text3);margin-top:4px">Plan wird komprimiert gespeichert</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-grundriss-add')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveGrundrissModal()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── GRUNDRISS: Pin hinzufügen / bearbeiten ── -->
+<div class="modal-overlay" id="modal-grundriss-pin">
+  <div class="modal" style="max-width:480px">
+    <h3 id="gr-pin-title">Markierung hinzufügen</h3>
+    <input type="hidden" id="gr-pin-id">
+    <input type="hidden" id="gr-pin-grundriss-id">
+    <div class="form-row"><label>Typ</label>
+      <select id="gr-pin-typ">
+        <option value="Elektro">⚡ Elektro</option>
+        <option value="Wasser">💧 Wasser</option>
+        <option value="Heizung">🔥 Heizung</option>
+        <option value="Gas">🔵 Gas</option>
+        <option value="Lüftung">🌀 Lüftung</option>
+        <option value="Internet/TV">📡 Internet / TV</option>
+        <option value="Sonstiges">📌 Sonstiges</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Titel</label>
+      <input type="text" id="gr-pin-titel" placeholder="z.B. 230V Leitung gestemmt">
+    </div>
+    <div class="form-row"><label>Notiz</label>
+      <textarea id="gr-pin-notiz" rows="3" placeholder="z.B. Verlauf von Steckdose A nach Verteiler, 4cm tief…" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:'Inter',sans-serif;font-size:0.875rem;color:var(--text);background:var(--surface2);resize:vertical;outline:none"></textarea>
+    </div>
+    <div class="form-row"><label>Datum</label>
+      <input type="date" id="gr-pin-datum">
+    </div>
+    <div class="form-row">
+      <label>Fotos <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+      <input type="file" id="gr-pin-foto-input" accept="image/*" multiple onchange="addGrPinFotos(this)">
+      <div id="gr-pin-fotos-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="gr-pin-del-btn" onclick="deletePinFromModal()" style="display:none;color:var(--danger);border-color:var(--danger)">🗑 Löschen</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-grundriss-pin')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="savePinModal()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- Foto Titel Modal -->
 <div class="modal-overlay" id="modal-foto-info">
   <div class="modal">
@@ -3777,7 +3857,7 @@ const EMPTY_PROJECT = () => ({
   notizen: [], kontakte: [], gantt: [], fotos: [], fotoAlben: [],
   dokumentation: [], wartungen: [], abhaengigkeiten: [],
   angebote: [], zahlungen: [], maengel: [], gescannteRechnungen: [], zahlungspersonen: [],
-  dateien: [],
+  dateien: [], grundrisse: [],
   _deletedIds: {}   // tombstone: { "id": deletedAtTimestamp }
 });
 
@@ -3800,7 +3880,7 @@ const ITEM_TYPES = [
   'tagebuch','notizen','kontakte','gantt','fotos','fotoAlben',
   'dokumentation','angebote','zahlungen','zahlungsplan','zahlungspersonen',
   'maengel','wartungen','gewerke','personen','abhaengigkeiten',
-  'gescannteRechnungen','dateien'
+  'gescannteRechnungen','dateien','grundrisse'
 ];
 
 // Record a deletion — immediately removes from Supabase so realtime can't resurrect it
@@ -4056,6 +4136,7 @@ function showPage(id) {
   if (id === 'zahlungsplan') renderZahlungsplan();
   if (id === 'maengel') renderMaengel();
   if (id === 'fotos') renderFotos();
+  if (id === 'grundrisse') renderGrundrisse();
   if (id === 'kostenchart') renderKostenChart();
   if (id === 'kostenaufteilung') renderKostenaufteilung();
   if (id === 'dokumentation') renderDoku();
@@ -7965,6 +8046,346 @@ function drawDoughnutChart(canvasId, labels, data) {
   });
 }
 
+// ══════════════════════════════════════════════════════
+// ──────────────── GRUNDRISSE ────────────────────────
+// ══════════════════════════════════════════════════════
+
+let _grPinFotosPending = []; // base64 fotos for current pin modal
+let _grActiveId = null;      // currently viewed floor id
+
+const GR_PIN_TYPEN = {
+  'Elektro':    { icon: '⚡', color: '#f59e0b' },
+  'Wasser':     { icon: '💧', color: '#3b82f6' },
+  'Heizung':    { icon: '🔥', color: '#ef4444' },
+  'Gas':        { icon: '🔵', color: '#6366f1' },
+  'Lüftung':    { icon: '🌀', color: '#06b6d4' },
+  'Internet/TV':{ icon: '📡', color: '#8b5cf6' },
+  'Sonstiges':  { icon: '📌', color: '#64748b' },
+};
+
+function renderGrundrisse() {
+  state.grundrisse = state.grundrisse || [];
+  const tabsEl   = document.getElementById('gr-tabs');
+  const content  = document.getElementById('gr-content');
+  if (!tabsEl || !content) return;
+
+  if (state.grundrisse.length === 0) {
+    tabsEl.innerHTML = '';
+    content.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text3)">
+        <div style="font-size:3rem;margin-bottom:12px">🗺️</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:6px">Noch kein Grundriss vorhanden</div>
+        <div style="font-size:0.875rem;margin-bottom:20px">Lade einen Plan hoch und markiere Leitungen, Installationen und wichtige Stellen.</div>
+        <button class="btn btn-primary" onclick="openAddGrundrissModal()">+ Erstes Stockwerk anlegen</button>
+      </div>`;
+    return;
+  }
+
+  // ensure active id is valid
+  if (!_grActiveId || !state.grundrisse.find(g => g.id === _grActiveId)) {
+    _grActiveId = state.grundrisse[0].id;
+  }
+
+  // Render tabs
+  tabsEl.innerHTML = state.grundrisse.map(g => `
+    <button onclick="setGrActive(${g.id})" style="
+      padding:8px 18px;border-radius:20px;font-family:'Inter',sans-serif;font-size:0.85rem;
+      font-weight:600;cursor:pointer;border:1.5px solid var(--border);transition:all 0.15s;
+      background:${g.id === _grActiveId ? 'var(--accent)' : 'var(--surface)'};
+      color:${g.id === _grActiveId ? 'white' : 'var(--text2)'};
+      border-color:${g.id === _grActiveId ? 'var(--accent)' : 'var(--border)'}">
+      ${g.name}
+    </button>
+  `).join('') + `
+    <button onclick="openAddGrundrissModal()" style="
+      padding:8px 14px;border-radius:20px;font-family:'Inter',sans-serif;font-size:0.85rem;
+      font-weight:600;cursor:pointer;border:1.5px dashed var(--border);background:none;
+      color:var(--text3);transition:all 0.15s"
+      onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+      onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">+ Stockwerk</button>`;
+
+  renderGrundrissFloor(_grActiveId);
+}
+
+function setGrActive(id) {
+  _grActiveId = id;
+  renderGrundrisse();
+}
+
+function renderGrundrissFloor(grundrissId) {
+  const content = document.getElementById('gr-content');
+  const g = (state.grundrisse || []).find(x => x.id === grundrissId);
+  if (!g) return;
+
+  const pins = g.pins || [];
+  const pinsHtml = pins.map(p => {
+    const t = GR_PIN_TYPEN[p.typ] || GR_PIN_TYPEN['Sonstiges'];
+    return `<button
+      onclick="openEditPin(${grundrissId},${p.id})"
+      title="${p.titel||p.typ}${p.notiz ? ': '+p.notiz : ''}"
+      style="position:absolute;left:calc(${p.x*100}% - 16px);top:calc(${p.y*100}% - 16px);
+        width:32px;height:32px;border-radius:50%;border:2.5px solid white;
+        background:${t.color};color:white;font-size:0.9rem;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 2px 8px rgba(0,0,0,0.35);z-index:10;transition:transform 0.12s;
+        padding:0;line-height:1"
+      onmouseover="this.style.transform='scale(1.25)'"
+      onmouseout="this.style.transform='scale(1)'"
+    >${t.icon}</button>`;
+  }).join('');
+
+  const planHtml = g.bild
+    ? `<div id="gr-plan-wrap" style="position:relative;display:inline-block;max-width:100%;cursor:crosshair"
+         onclick="handleGrundrissClick(event,${grundrissId})">
+         <img src="${g.bild}" id="gr-plan-img" style="display:block;max-width:100%;border-radius:10px;user-select:none" draggable="false">
+         ${pinsHtml}
+       </div>
+       <div style="margin-top:10px;font-size:0.78rem;color:var(--text3)">💡 Klicke auf den Plan um eine Markierung hinzuzufügen · Klicke auf einen Pin um ihn zu bearbeiten</div>`
+    : `<div style="border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text3)">
+         <div style="font-size:2rem;margin-bottom:10px">🗺️</div>
+         <div style="font-weight:600;margin-bottom:8px">Noch kein Plan hochgeladen</div>
+         <button class="btn btn-ghost" onclick="openAddGrundrissModal(${grundrissId})">Plan hochladen</button>
+       </div>`;
+
+  // Pin list below map
+  const listHtml = pins.length > 0 ? `
+    <div style="margin-top:22px">
+      <div style="font-weight:700;font-size:0.82rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">
+        ${pins.length} Markierung${pins.length!==1?'en':''}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${pins.map(p => {
+          const t = GR_PIN_TYPEN[p.typ] || GR_PIN_TYPEN['Sonstiges'];
+          return `<div onclick="openEditPin(${grundrissId},${p.id})"
+            style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);
+              border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all 0.15s"
+            onmouseover="this.style.borderColor='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border)'">
+            <div style="width:34px;height:34px;border-radius:50%;background:${t.color};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${t.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.875rem;color:var(--text)">${p.titel||p.typ}</div>
+              ${p.notiz ? `<div style="font-size:0.78rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.notiz}</div>` : ''}
+            </div>
+            <div style="font-size:0.75rem;color:var(--text3);flex-shrink:0">${p.datum ? fmtDate(p.datum) : ''}</div>
+            ${p.fotos?.length ? `<div style="font-size:0.75rem;color:var(--text3)">📷 ${p.fotos.length}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-weight:700;font-size:1rem;color:var(--text)">${g.name}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="font-size:0.8rem" onclick="openAddGrundrissModal(${grundrissId})">✏️ Bearbeiten</button>
+        <button class="btn btn-ghost" style="font-size:0.8rem;color:var(--danger);border-color:var(--danger)" onclick="deleteGrundriss(${grundrissId})">🗑 Löschen</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">${planHtml}</div>
+    ${listHtml}`;
+}
+
+function handleGrundrissClick(e, grundrissId) {
+  // Don't fire if user clicked a pin button
+  if (e.target.tagName === 'BUTTON') return;
+  const wrap = document.getElementById('gr-plan-wrap');
+  const img  = document.getElementById('gr-plan-img');
+  if (!wrap || !img) return;
+  const rect = img.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top)  / rect.height;
+  openAddPin(grundrissId, x, y);
+}
+
+function openAddGrundrissModal(editId) {
+  const g = editId ? (state.grundrisse||[]).find(x => x.id === editId) : null;
+  document.getElementById('gr-add-title').textContent = g ? 'Stockwerk bearbeiten' : 'Stockwerk hinzufügen';
+  document.getElementById('gr-edit-id').value = g ? g.id : '';
+  document.getElementById('gr-name').value    = g ? g.name : '';
+  document.getElementById('gr-bild-input').value = '';
+  const preview = document.getElementById('gr-bild-preview');
+  const img     = document.getElementById('gr-bild-img');
+  if (g?.bild) { img.src = g.bild; preview.style.display = ''; }
+  else { preview.style.display = 'none'; img.src = ''; }
+  openModal('modal-grundriss-add');
+}
+
+function previewGrundrissImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img2 = new Image();
+    img2.onload = () => {
+      const MAX = 2400;
+      let w = img2.width, h = img2.height;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img2, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      const prev = document.getElementById('gr-bild-preview');
+      const prevImg = document.getElementById('gr-bild-img');
+      prevImg.src = dataUrl;
+      prev.style.display = '';
+      input._compressed = dataUrl;
+    };
+    img2.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveGrundrissModal() {
+  const editId = parseInt(document.getElementById('gr-edit-id').value) || null;
+  const name   = document.getElementById('gr-name').value.trim();
+  if (!name) { showToast('⚠️ Bitte eine Bezeichnung eingeben', 'error'); return; }
+
+  const fileInput = document.getElementById('gr-bild-input');
+  const newBild   = fileInput._compressed || null;
+
+  state.grundrisse = state.grundrisse || [];
+
+  if (editId) {
+    const g = state.grundrisse.find(x => x.id === editId);
+    if (g) {
+      g.name = name;
+      if (newBild) g.bild = newBild;
+    }
+    showToast('✅ Stockwerk aktualisiert', 'success');
+  } else {
+    state.grundrisse.push({ id: Date.now(), name, bild: newBild || null, pins: [] });
+    _grActiveId = state.grundrisse[state.grundrisse.length - 1].id;
+    showToast('✅ Stockwerk angelegt', 'success');
+  }
+
+  fileInput._compressed = null;
+  save();
+  closeModal('modal-grundriss-add');
+  renderGrundrisse();
+}
+
+function deleteGrundriss(id) {
+  const g = (state.grundrisse||[]).find(x => x.id === id);
+  if (!g) return;
+  if (!confirm(`Stockwerk „${g.name}" mit allen ${g.pins?.length||0} Markierungen löschen?`)) return;
+  state.grundrisse = state.grundrisse.filter(x => x.id !== id);
+  _grActiveId = state.grundrisse[0]?.id || null;
+  save();
+  renderGrundrisse();
+  showToast('🗑 Stockwerk gelöscht', 'success');
+}
+
+// ── PINS ────────────────────────────────────────────
+
+function openAddPin(grundrissId, x, y) {
+  _grPinFotosPending = [];
+  document.getElementById('gr-pin-title').textContent = 'Markierung hinzufügen';
+  document.getElementById('gr-pin-id').value = '';
+  document.getElementById('gr-pin-grundriss-id').value = grundrissId;
+  document.getElementById('gr-pin-typ').value   = 'Elektro';
+  document.getElementById('gr-pin-titel').value = '';
+  document.getElementById('gr-pin-notiz').value = '';
+  document.getElementById('gr-pin-datum').value = today();
+  document.getElementById('gr-pin-fotos-preview').innerHTML = '';
+  document.getElementById('gr-pin-del-btn').style.display = 'none';
+  // store click position temporarily
+  document.getElementById('modal-grundriss-pin')._pendingX = x;
+  document.getElementById('modal-grundriss-pin')._pendingY = y;
+  openModal('modal-grundriss-pin');
+}
+
+function openEditPin(grundrissId, pinId) {
+  const g = (state.grundrisse||[]).find(x => x.id === grundrissId);
+  const p = g?.pins?.find(x => x.id === pinId);
+  if (!p) return;
+  _grPinFotosPending = [...(p.fotos||[])];
+  document.getElementById('gr-pin-title').textContent = 'Markierung bearbeiten';
+  document.getElementById('gr-pin-id').value = pinId;
+  document.getElementById('gr-pin-grundriss-id').value = grundrissId;
+  document.getElementById('gr-pin-typ').value   = p.typ || 'Sonstiges';
+  document.getElementById('gr-pin-titel').value = p.titel || '';
+  document.getElementById('gr-pin-notiz').value = p.notiz || '';
+  document.getElementById('gr-pin-datum').value = p.datum || today();
+  document.getElementById('gr-pin-del-btn').style.display = '';
+  document.getElementById('modal-grundriss-pin')._pendingX = null;
+  document.getElementById('modal-grundriss-pin')._pendingY = null;
+  renderGrPinFotosPreview();
+  openModal('modal-grundriss-pin');
+}
+
+async function addGrPinFotos(input) {
+  const files = Array.from(input.files);
+  input.value = '';
+  for (const file of files) {
+    try {
+      const { url } = await uploadPhotoToStorage(file);
+      _grPinFotosPending.push(url);
+    } catch(e) { showToast('⚠️ ' + e.message, 'error'); }
+  }
+  renderGrPinFotosPreview();
+}
+
+function renderGrPinFotosPreview() {
+  const el = document.getElementById('gr-pin-fotos-preview');
+  if (!el) return;
+  el.innerHTML = _grPinFotosPending.map((src, i) => `
+    <div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0">
+      <img src="${src}" style="width:100%;height:100%;object-fit:cover">
+      <button onclick="removeGrPinFoto(${i})"
+        style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:0.65rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+    </div>`).join('');
+}
+
+function removeGrPinFoto(i) {
+  _grPinFotosPending.splice(i, 1);
+  renderGrPinFotosPreview();
+}
+
+function savePinModal() {
+  const grundrissId = parseInt(document.getElementById('gr-pin-grundriss-id').value);
+  const pinId       = parseInt(document.getElementById('gr-pin-id').value) || null;
+  const typ         = document.getElementById('gr-pin-typ').value;
+  const titel       = document.getElementById('gr-pin-titel').value.trim() || typ;
+  const notiz       = document.getElementById('gr-pin-notiz').value.trim();
+  const datum       = document.getElementById('gr-pin-datum').value || today();
+  const modal       = document.getElementById('modal-grundriss-pin');
+
+  const g = (state.grundrisse||[]).find(x => x.id === grundrissId);
+  if (!g) return;
+  g.pins = g.pins || [];
+
+  if (pinId) {
+    // Edit existing
+    const p = g.pins.find(x => x.id === pinId);
+    if (p) { p.typ = typ; p.titel = titel; p.notiz = notiz; p.datum = datum; p.fotos = [..._grPinFotosPending]; }
+    showToast('✅ Markierung aktualisiert', 'success');
+  } else {
+    // New pin
+    const x = modal._pendingX ?? 0.5;
+    const y = modal._pendingY ?? 0.5;
+    g.pins.push({ id: Date.now(), x, y, typ, titel, notiz, datum, fotos: [..._grPinFotosPending] });
+    showToast('📍 Markierung gespeichert', 'success');
+  }
+
+  save();
+  closeModal('modal-grundriss-pin');
+  renderGrundrisse();
+}
+
+function deletePinFromModal() {
+  const grundrissId = parseInt(document.getElementById('gr-pin-grundriss-id').value);
+  const pinId       = parseInt(document.getElementById('gr-pin-id').value);
+  if (!confirm('Markierung löschen?')) return;
+  const g = (state.grundrisse||[]).find(x => x.id === grundrissId);
+  if (g) g.pins = (g.pins||[]).filter(p => p.id !== pinId);
+  save();
+  closeModal('modal-grundriss-pin');
+  renderGrundrisse();
+  showToast('🗑 Markierung gelöscht', 'success');
+}
+
 // ──────────────── DOKUMENTATION ────────────────
 let dokuFilter = '';
 
@@ -8931,6 +9352,7 @@ function _setupRealtimeSync() {
           else if (pid === 'kontakte') renderKontakte();
           else if (pid === 'maengel') renderMaengel();
           else if (pid === 'fotos') renderFotos();
+          else if (pid === 'grundrisse') renderGrundrisse();
           else if (pid === 'zeitplan') renderZeitplan?.();
           else if (pid === 'planung') { renderMilestones?.(); renderGantt?.(); }
         }
@@ -11341,6 +11763,7 @@ async function _syncAndRender() {
   else if (pageId === 'kontakte') renderKontakte();
   else if (pageId === 'maengel') renderMaengel();
   else if (pageId === 'fotos') renderFotos();
+  else if (pageId === 'grundrisse') renderGrundrisse();
   else if (pageId === 'zeitplan') renderZeitplan?.();
 }
 
