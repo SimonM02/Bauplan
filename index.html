@@ -4913,7 +4913,6 @@ function editBudgetKat(id) {
 
 async function deleteBudgetKat(id) {
   if (!confirm('Kategorie löschen?')) return;
-  _trackDeletion(id, 'budgetKat');
   state.budgetKat = state.budgetKat.filter(k => k.id !== id);
   renderBudget();
   showToast('🗑 Kategorie gelöscht', 'success');
@@ -4921,8 +4920,8 @@ async function deleteBudgetKat(id) {
   const idx = projects.findIndex(p => p.id === currentProjectId);
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
   localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-  // Cancel any pending debounced sync and run immediately
-  // so tombstone reaches projektdaten BEFORE Realtime can fire a reload
+  // Sync immediately so the updated budgetKat array reaches projektdaten
+  // before any Realtime event could trigger a reload with old data
   clearTimeout(syncTimeout);
   await syncToCloud();
 }
@@ -8959,11 +8958,13 @@ async function syncToCloud() {
     }
 
     // ── 2. Upsert remaining items into projekt_items ────────────────
+    // Note: budgetKat is stored in projektdaten (see metaProjects above), not here
     const rows = [];
     for (const proj of projects) {
       const pid = String(proj.id);
       const deleted = proj._deletedIds || {};
       for (const typ of ITEM_TYPES) {
+        if (typ === 'budgetKat') continue; // stored in projektdaten, not projekt_items
         for (const item of (proj[typ] || [])) {
           if (item?.id == null) continue;
           if (deleted[String(item.id)]) continue; // never re-upsert tombstoned items
@@ -8991,6 +8992,7 @@ async function syncToCloud() {
     const metaProjects = projects.map(p => ({
       id: p.id,
       settings: p.settings,
+      budgetKat: (p.budgetKat || []).map((k, i) => ({ ...k, _order: i })),
       _deletedIds: p._deletedIds || {}
     }));
     const daten = {
@@ -9096,12 +9098,23 @@ async function loadFromCloud() {
       finalProjects = cloudMeta.projects.map(meta => {
         const proj = { ...EMPTY_PROJECT(), ...meta };
         const del  = proj._deletedIds || {};
-        ITEM_TYPES.forEach(t => { proj[t] = []; }); // clear arrays
+        // budgetKat comes from projektdaten (meta.budgetKat), clear all other arrays
+        const hasBudgetKatInMeta = Array.isArray(meta.budgetKat) && meta.budgetKat.length > 0;
+        ITEM_TYPES.forEach(t => {
+          if (t === 'budgetKat' && hasBudgetKatInMeta) return; // keep from meta
+          proj[t] = [];
+        });
+        // Reconstruct other items from projekt_items rows
         itemRows.filter(r => r.project_id === String(meta.id)).forEach(r => {
           if (!ITEM_TYPES.includes(r.item_type)) return;
-          if (del[r.item_id]) return; // skip items tombstoned on any device
+          if (r.item_type === 'budgetKat') return; // always use meta version
+          if (del[r.item_id]) return; // skip tombstoned items
           proj[r.item_type].push(r.payload);
         });
+        // Sort budgetKat by _order to preserve user-defined position
+        if (Array.isArray(proj.budgetKat)) {
+          proj.budgetKat.sort((a, b) => (a._order ?? 9999) - (b._order ?? 9999));
+        }
         return proj;
       });
       // Add any projects that only appear in item rows (rare edge case)
