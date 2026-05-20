@@ -7179,30 +7179,41 @@ function initGanttDrag(minD) {
 
 // ──────────────── FOTOS ────────────────
 // ══════════════════════════════════════
-// SUPABASE STORAGE – Foto Upload Helper
+// Foto Upload Helper – komprimiert Bild
+// lokal und speichert als base64 DataURL
+// direkt in der Datenbank (kein Storage
+// Bucket in Supabase nötig).
 // ══════════════════════════════════════
-const STORAGE_BUCKET = 'buildora-fotos';
 
-async function uploadPhotoToStorage(file, folder = 'galerie') {
-  if (!currentUser || !supa) throw new Error('Nicht angemeldet');
-  const ext      = file.name.split('.').pop().toLowerCase() || 'jpg';
-  const fileName = `${currentUser.id}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const { data, error } = await supa.storage
-    .from(STORAGE_BUCKET)
-    .upload(fileName, file, { cacheControl: '3600', upsert: false });
-  if (error) {
-    if (error.message?.includes('Bucket not found') || error.message?.includes('bucket')) {
-      throw new Error('Storage-Bucket fehlt. Bitte "buildora-fotos" in Supabase → Storage anlegen (Public Bucket).');
-    }
-    throw new Error('Upload fehlgeschlagen: ' + error.message);
-  }
-  const { data: urlData } = supa.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
-  return { url: urlData.publicUrl, path: fileName };
+async function uploadPhotoToStorage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden'));
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden'));
+      img.onload = () => {
+        // Compress: max 1200px on longest side, 80% JPEG quality
+        const MAX = 1200;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
+        resolve({ url: dataUrl, path: null });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function deletePhotoFromStorage(path) {
-  if (!path) return;
-  await supa.storage.from(STORAGE_BUCKET).remove([path]);
+  // Photos are stored as base64 in the DB — nothing to delete from storage
 }
 
 // ── FOTO-GALERIE ─────────────────────────────────
