@@ -9104,10 +9104,11 @@ async function loadFromCloud() {
           if (t === 'budgetKat' && hasBudgetKatInMeta) return; // keep from meta
           proj[t] = [];
         });
-        // Reconstruct other items from projekt_items rows
+        // Reconstruct items from projekt_items rows
+        // budgetKat: use meta version if available, else fall back to projekt_items (migration)
         itemRows.filter(r => r.project_id === String(meta.id)).forEach(r => {
           if (!ITEM_TYPES.includes(r.item_type)) return;
-          if (r.item_type === 'budgetKat') return; // always use meta version
+          if (r.item_type === 'budgetKat' && hasBudgetKatInMeta) return; // prefer meta version
           if (del[r.item_id]) return; // skip tombstoned items
           proj[r.item_type].push(r.payload);
         });
