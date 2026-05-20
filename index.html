@@ -3837,8 +3837,10 @@ function saveAll() {
   STAMP_FIELDS.forEach(f => { if (Array.isArray(state[f])) state[f] = _stampUpdatedAt(state[f]); });
 
   // Stamp _order on budgetKat so position survives cloud sync & multi-device reload
+  // Also stamp _budgetKatTs so loadFromCloud() knows local state is authoritative
   if (Array.isArray(state.budgetKat)) {
     state.budgetKat.forEach((k, i) => { k._order = i; });
+    state._budgetKatTs = state._budgetKatTs || Date.now();
   }
 
   const idx = projects.findIndex(p => p.id === currentProjectId);
@@ -4914,14 +4916,19 @@ function editBudgetKat(id) {
 async function deleteBudgetKat(id) {
   if (!confirm('Kategorie löschen?')) return;
   state.budgetKat = state.budgetKat.filter(k => k.id !== id);
+  // Re-stamp _order after deletion so positions stay clean
+  state.budgetKat.forEach((k, i) => { k._order = i; });
+  // Timestamp so loadFromCloud() knows our local state is authoritative
+  state._budgetKatTs = Date.now();
   renderBudget();
   showToast('🗑 Kategorie gelöscht', 'success');
   // Update localStorage + projects array immediately
   const idx = projects.findIndex(p => p.id === currentProjectId);
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
   localStorage.setItem('bauplan_projects', JSON.stringify(projects));
-  // Sync immediately so the updated budgetKat array reaches projektdaten
-  // before any Realtime event could trigger a reload with old data
+  // Sync immediately — projektdaten is written FIRST in syncToCloud so by the
+  // time Realtime fires from projekt_items upserts, the cloud already has the
+  // correct (post-deletion) budgetKat
   clearTimeout(syncTimeout);
   await syncToCloud();
 }
@@ -8942,8 +8949,39 @@ async function syncToCloud() {
     const ts = new Date().toISOString();
     localStorage.setItem('bauplan_updated_at', ts);
 
-    // ── 1. Hard-delete tombstoned items FIRST ──────────────────────
-    // Must happen before upsert so realtime sees clean state when it fires
+    // ── 1. Save projektdaten (budgetKat, settings) FIRST ───────────
+    // CRITICAL ORDER: projektdaten must be written before projekt_items upserts.
+    // Realtime fires from projekt_items changes (step 3). If loadFromCloud()
+    // is triggered during step 3, projektdaten already reflects the correct
+    // budgetKat (including any deletions), so no deleted category can come back.
+    const metaProjects = projects.map(p => ({
+      id: p.id,
+      settings: p.settings,
+      budgetKat: (p.budgetKat || []).map((k, i) => ({ ...k, _order: i })),
+      _budgetKatTs: p._budgetKatTs || 0,
+      _deletedIds: p._deletedIds || {}
+    }));
+    const daten = {
+      projects: metaProjects,
+      currentProjectId,
+      onboarded: true,
+      updated_at: ts,
+      prefs: { darkMode: document.body.classList.contains('dark-mode') }
+    };
+
+    const { data: existing } = await supa.from('projektdaten')
+      .select('id').eq('user_id', currentUser.id).maybeSingle();
+    if (existing) {
+      const { error } = await supa.from('projektdaten')
+        .update({ daten, updated_at: ts }).eq('user_id', currentUser.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supa.from('projektdaten')
+        .insert({ user_id: currentUser.id, typ: 'all_projects', daten, updated_at: ts });
+      if (error) throw error;
+    }
+
+    // ── 2. Hard-delete tombstoned items ────────────────────────────
     for (const proj of projects) {
       const deletedIds = Object.keys(proj._deletedIds || {});
       if (deletedIds.length > 0) {
@@ -8957,8 +8995,8 @@ async function syncToCloud() {
       }
     }
 
-    // ── 2. Upsert remaining items into projekt_items ────────────────
-    // Note: budgetKat is stored in projektdaten (see metaProjects above), not here
+    // ── 3. Upsert remaining items into projekt_items ────────────────
+    // Note: budgetKat is stored in projektdaten (step 1), not here
     const rows = [];
     for (const proj of projects) {
       const pid = String(proj.id);
@@ -8985,33 +9023,6 @@ async function syncToCloud() {
     for (let i = 0; i < rows.length; i += 500) {
       const { error } = await supa.from('projekt_items')
         .upsert(rows.slice(i, i + 500), { onConflict: 'user_id,project_id,item_type,item_id' });
-      if (error) throw error;
-    }
-
-    // ── 3. Save project metadata (settings, prefs) to projektdaten ─
-    const metaProjects = projects.map(p => ({
-      id: p.id,
-      settings: p.settings,
-      budgetKat: (p.budgetKat || []).map((k, i) => ({ ...k, _order: i })),
-      _deletedIds: p._deletedIds || {}
-    }));
-    const daten = {
-      projects: metaProjects,
-      currentProjectId,
-      onboarded: true,
-      updated_at: ts,
-      prefs: { darkMode: document.body.classList.contains('dark-mode') }
-    };
-
-    const { data: existing } = await supa.from('projektdaten')
-      .select('id').eq('user_id', currentUser.id).maybeSingle();
-    if (existing) {
-      const { error } = await supa.from('projektdaten')
-        .update({ daten, updated_at: ts }).eq('user_id', currentUser.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supa.from('projektdaten')
-        .insert({ user_id: currentUser.id, typ: 'all_projects', daten, updated_at: ts });
       if (error) throw error;
     }
 
@@ -9115,6 +9126,16 @@ async function loadFromCloud() {
         // Sort budgetKat by _order to preserve user-defined position
         if (Array.isArray(proj.budgetKat)) {
           proj.budgetKat.sort((a, b) => (a._order ?? 9999) - (b._order ?? 9999));
+        }
+        // Safety net: if local state for this project has a NEWER budgetKat timestamp
+        // (e.g. a delete happened locally but syncToCloud is still running),
+        // keep the local version instead of overwriting with potentially stale cloud data.
+        const localProj = projects.find(p => String(p.id) === String(meta.id));
+        const localTs  = localProj?._budgetKatTs || 0;
+        const cloudTs2 = meta._budgetKatTs || 0;
+        if (localTs > cloudTs2 && localProj?.budgetKat) {
+          proj.budgetKat   = localProj.budgetKat;
+          proj._budgetKatTs = localTs;
         }
         return proj;
       });
