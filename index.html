@@ -1217,7 +1217,7 @@
   .gantt-month-header { flex: 1; text-align: center; padding: 10px 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--text2); border-right: 1px solid var(--border); font-weight: 500; }
   .gantt-row { display: flex; border-bottom: 1px solid var(--border); align-items: center; min-height: 46px; }
   .gantt-row:last-child { border-bottom: none; }
-  .gantt-row:hover { background: #f6f9ff; }
+  .gantt-row:hover { background: var(--surface2); }
   .gantt-row-label { width: 200px; flex-shrink: 0; padding: 10px 16px; font-size: 0.84rem; border-right: 1.5px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
   .gantt-row-label small { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text3); }
   .gantt-timeline { flex: 1; position: relative; height: 46px; }
@@ -1385,7 +1385,9 @@
 
   .sidebar { transition: width 0.22s ease; }
 
+  .hide-mobile { display: table-cell; }
   @media (max-width: 768px) {
+    .hide-mobile { display: none !important; }
     /* Sidebar becomes a slide-in overlay */
     .sidebar {
       position: fixed !important;
@@ -1615,7 +1617,7 @@
   }
 
   .gantt-row:last-child { border-bottom: none; }
-  .gantt-row:hover { background: #f8faff; }
+  .gantt-row:hover { background: var(--surface2); }
 
   .gantt-row-label {
     width: 200px;
@@ -2421,7 +2423,7 @@
         <div style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--text3)" id="bg-kat-count"></div>
       </div>
       <table>
-        <thead><tr><th style="width:28px"></th><th>Kategorie</th><th>Geplant</th><th>% vom Gesamt</th><th>Ausgegeben</th><th>Rest</th><th>Auslastung</th><th></th></tr></thead>
+        <thead><tr><th style="width:28px"></th><th>Kategorie</th><th>Geplant</th><th class="hide-mobile">% Gesamt</th><th>Ausgegeben</th><th>Rest</th><th class="hide-mobile">Auslastung</th><th style="position:sticky;right:0;background:var(--surface2)"></th></tr></thead>
         <tbody id="budget-table"></tbody>
       </table>
     </div>
@@ -2591,8 +2593,9 @@
               <span style="color:var(--text3);font-size:0.75rem">Wichtig: Die App muss auf allen Geräten mit <strong>demselben Konto</strong> eingeloggt sein.</span>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button onclick="forceSyncFromCloud()" class="btn btn-ghost" style="font-size:0.8rem">☁️ Jetzt von Cloud laden</button>
-              <button onclick="forceSyncToCloud()" class="btn btn-ghost" style="font-size:0.8rem">⬆️ Jetzt zur Cloud speichern</button>
+              <button onclick="forceSyncFromCloud()" class="btn btn-ghost" style="font-size:0.8rem">☁️ Von Cloud laden</button>
+              <button onclick="forceSyncToCloud()" class="btn btn-ghost" style="font-size:0.8rem">⬆️ Zur Cloud speichern</button>
+              <button onclick="forceCloudOverwrite()" class="btn btn-ghost" style="font-size:0.8rem;color:var(--danger)">🔄 Cloud überschreibt alles</button>
             </div>
             <div id="sync-info-output" style="display:none;font-size:0.73rem;font-family:monospace;background:var(--surface2);border-radius:8px;padding:8px 12px;line-height:1.7;white-space:pre-wrap;color:var(--text2)"></div>
           </div>
@@ -3776,7 +3779,8 @@ const EMPTY_PROJECT = () => ({
   notizen: [], kontakte: [], gantt: [], fotos: [], fotoAlben: [],
   dokumentation: [], wartungen: [], abhaengigkeiten: [],
   angebote: [], zahlungen: [], maengel: [], gescannteRechnungen: [], zahlungspersonen: [],
-  dateien: []
+  dateien: [],
+  _deletedIds: {}   // tombstone: { "id": deletedAtTimestamp }
 });
 
 let projects = [];      // array of all projects
@@ -3790,6 +3794,40 @@ function _stampUpdatedAt(arr) {
   if (!Array.isArray(arr)) return arr;
   const now = Date.now();
   return arr.map(item => item?._updatedAt ? item : { ...item, _updatedAt: now });
+}
+
+// All array fields that get stored as individual rows in projekt_items
+const ITEM_TYPES = [
+  'kosten','eigenleistungen','budgetKat','meilensteine','aufgaben',
+  'tagebuch','notizen','kontakte','gantt','fotos','fotoAlben',
+  'dokumentation','angebote','zahlungen','zahlungsplan','zahlungspersonen',
+  'maengel','wartungen','gewerke','personen','abhaengigkeiten',
+  'gescannteRechnungen','dateien'
+];
+
+// Record a deletion — immediately removes from Supabase so realtime can't resurrect it
+function _trackDeletion(id, type = '') {
+  if (id == null) return;
+  state._deletedIds = state._deletedIds || {};
+  state._deletedIds[String(id)] = { ts: Date.now(), type };
+  // Prune tombstones older than 60 days to keep storage lean
+  const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  for (const [k, v] of Object.entries(state._deletedIds)) {
+    const ts = typeof v === 'number' ? v : v?.ts;
+    if (!ts || ts < cutoff) delete state._deletedIds[k];
+  }
+  // Immediately hard-delete from Supabase (fire-and-forget)
+  // Block realtime for 2 s so the delete can propagate before any reload
+  if (currentUser && currentProjectId) {
+    _holdRealtime(500); // immediate block while request is in-flight
+    supa.from('projekt_items')
+      .delete()
+      .eq('user_id', currentUser.id)
+      .eq('project_id', String(currentProjectId))
+      .eq('item_id', String(id))
+      .then(() => { _holdRealtime(2000); }) // extend after confirmed delete
+      .catch(() => {});
+  }
 }
 
 function saveAll() {
@@ -3849,10 +3887,47 @@ function loadAll() {
 
 function load() { loadAll(); } // compatibility
 
+// Remove duplicate budgetKat entries by name (keep first occurrence).
+// Also deletes the orphaned rows from Supabase so they can never resurface.
+// Called on every project load so the dashboard always sees clean data.
+function _deduplicateProject(proj) {
+  if (Array.isArray(proj.budgetKat)) {
+    const seen = new Set();
+    const kept    = [];
+    const removed = [];
+    for (const k of proj.budgetKat) {
+      if (!k?.name || seen.has(k.name)) removed.push(k);
+      else { seen.add(k.name); kept.push(k); }
+    }
+    if (removed.length > 0) {
+      proj.budgetKat = kept;
+      // Tombstone so syncToCloud also hard-deletes them
+      proj._deletedIds = proj._deletedIds || {};
+      removed.forEach(k => {
+        proj._deletedIds[String(k.id)] = { ts: Date.now(), type: 'budgetKat' };
+      });
+      // Immediately delete orphaned rows from Supabase (fire-and-forget)
+      if (currentUser && proj.id) {
+        const orphanIds = removed.map(k => String(k.id));
+        _holdRealtime(500);
+        supa.from('projekt_items').delete()
+          .eq('user_id', currentUser.id)
+          .eq('project_id', String(proj.id))
+          .in('item_id', orphanIds)
+          .then(() => { _holdRealtime(2000); })
+          .catch(() => {});
+      }
+    }
+  }
+  return proj;
+}
+
 function loadProject(id, rerender = true) {
   const proj = projects.find(p => p.id === id);
   if (!proj) return;
   currentProjectId = id;
+  // Dedup before deep-copy so state and projects are both clean
+  _deduplicateProject(proj);
   // Deep-copy into state
   state = JSON.parse(JSON.stringify(proj));
   updateProjectHeader();
@@ -4523,7 +4598,7 @@ function editKosten(id) {
   openModal('modal-kosten');
 }
 
-function deleteKosten(id) {
+function deleteKosten(id) { _trackDeletion(id, 'kosten');
   if (!confirm('Ausgabe löschen?')) return;
   state.kosten = state.kosten.filter(k => k.id !== id);
   save(); renderKosten(); renderBudget(); showToast('🗑 Ausgabe gelöscht', 'success');
@@ -4591,6 +4666,7 @@ function openBudgetDrilldown(katName) {
 
 function deleteDrilldownKosten(id, katName) {
   if (!confirm('Ausgabe löschen?')) return;
+  _trackDeletion(id, 'kosten');
   state.kosten = state.kosten.filter(k => k.id !== id);
   save();
   renderKosten();
@@ -4642,6 +4718,7 @@ function editEigenleistung(id) {
 
 function deleteEigenleistung(id) {
   if (!confirm('Eigenleistung löschen?')) return;
+  _trackDeletion(id, 'eigenleistungen');
   state.eigenleistungen = (state.eigenleistungen||[]).filter(e => e.id !== id);
   save(); renderKosten(); showToast('🗑 Eigenleistung gelöscht', 'success');
 }
@@ -4829,6 +4906,7 @@ function editBudgetKat(id) {
 
 function deleteBudgetKat(id) {
   if (!confirm('Kategorie löschen?')) return;
+  _trackDeletion(id, 'budgetKat');
   state.budgetKat = state.budgetKat.filter(k => k.id !== id);
   save(); renderBudget(); showToast('🗑 Kategorie gelöscht', 'success');
 }
@@ -4836,6 +4914,15 @@ function deleteBudgetKat(id) {
 const BG_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#84cc16'];
 
 function renderBudget() {
+  // Auto-dedup: remove categories with duplicate names (keep first occurrence)
+  const seen = new Set();
+  const before = state.budgetKat.length;
+  state.budgetKat = (state.budgetKat || []).filter(k => {
+    if (seen.has(k.name)) return false;
+    seen.add(k.name); return true;
+  });
+  if (state.budgetKat.length < before) save(); // persist the cleanup
+
   const totalBudget = state.budgetKat.reduce((s,k) => s + k.budget, 0);
   const totalSpent  = state.kosten.filter(k => k.status !== 'Storniert').reduce((s,k) => s + (parseFloat(k.betrag)||0), 0);
   const totalRest   = totalBudget - totalSpent;
@@ -4913,7 +5000,7 @@ function renderBudget() {
       return `<tr draggable="true"
         ondragstart="_budgDragStart(event,${i})" ondragover="_budgDragOver(event,${i})" ondrop="_budgDrop(event,${i})" ondragend="_budgDragEnd(event)"
         style="cursor:pointer" onclick="openBudgetDrilldown('${kat.name.replace(/'/g,"\\'")}')"
-        onmouseover="this.style.background='#f0f5ff'" onmouseout="this.style.background=''">
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <td onclick="event.stopPropagation()" style="cursor:grab;color:var(--text3);font-size:1rem;text-align:center;user-select:none">⠿</td>
         <td>
           <span style="display:inline-flex;align-items:center;gap:8px;font-weight:700">
@@ -4923,10 +5010,10 @@ function renderBudget() {
           ${count > 0 ? `<div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--text3);margin-top:2px;margin-left:18px">${count} Buchungen – zum Öffnen klicken</div>` : `<div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--text3);margin-top:2px;margin-left:18px">Noch keine Buchungen</div>`}
         </td>
         <td style="font-family:'JetBrains Mono',monospace">${fmt(kat.budget)}</td>
-        <td><span class="badge badge-gray">${share}%</span></td>
+        <td class="hide-mobile"><span class="badge badge-gray">${share}%</span></td>
         <td style="font-family:'JetBrains Mono',monospace">${fmt(spent)}</td>
         <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${rest>=0?'var(--success)':'var(--danger)'}">${fmt(rest)}</td>
-        <td>
+        <td class="hide-mobile">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:6px;background:var(--surface3);border-radius:99px;overflow:hidden;min-width:60px">
               <div style="width:${pct}%;height:100%;background:${color};border-radius:99px;transition:width 0.4s"></div>
@@ -4934,7 +5021,7 @@ function renderBudget() {
             <span class="badge ${pct>90?'badge-red':pct>70?'badge-yellow':'badge-green'}" style="white-space:nowrap">${pct}%</span>
           </div>
         </td>
-        <td onclick="event.stopPropagation()" style="display:flex;gap:4px">
+        <td onclick="event.stopPropagation()" style="display:flex;gap:4px;position:sticky;right:0;background:var(--surface)">
           <button class="action-btn" onclick="editBudgetKat(${kat.id})" title="Bearbeiten">✏️</button>
           <button class="action-btn del" onclick="deleteBudgetKat(${kat.id})">🗑</button>
         </td>
@@ -5145,6 +5232,35 @@ function loadNotificationStatus() {
     badge.textContent = '○ Inaktiv'; badge.className = 'badge badge-yellow';
     if (btn) btn.style.display = '';
     if (pushRow) pushRow.style.display = 'none';
+  }
+}
+
+// Hard reset: throw away ALL local data and replace with whatever is in the cloud.
+// Use this to fix duplicate/desync issues on a specific device.
+async function forceCloudOverwrite() {
+  if (!confirm('⚠️ Alle lokalen Daten auf diesem Gerät werden durch die Cloud-Version ersetzt. Fortfahren?')) return;
+  const out = document.getElementById('sync-info-output');
+  if (out) { out.style.display = 'block'; out.textContent = '⏳ Lade Cloud-Daten…'; }
+  try {
+    if (!currentUser) throw new Error('Nicht eingeloggt');
+    const svcKey = null; // use user session
+    const res = await supa.from('projektdaten').select('daten').eq('user_id', currentUser.id).single();
+    if (res.error || !res.data?.daten) throw new Error('Keine Cloud-Daten gefunden');
+    const cloudData = res.data.daten;
+    // Overwrite local — no merge
+    projects = cloudData.projects || [];
+    currentProjectId = cloudData.currentProjectId || (projects[0]?.id ?? null);
+    if (currentProjectId) state = projects.find(p => p.id === currentProjectId) || EMPTY_PROJECT();
+    localStorage.setItem('bauplan_projects', JSON.stringify(projects));
+    localStorage.setItem('bauplan_current_project', String(currentProjectId));
+    localStorage.setItem('bauplan_user_id', currentUser.id);
+    applyModuleVisibility();
+    renderDashboard();
+    if (out) out.textContent = `✅ Cloud-Daten übernommen!\nProjekte: ${projects.length}\nKonto: ${currentUser.email}`;
+    showToast('✅ Lokale Daten durch Cloud ersetzt', 'success');
+  } catch(e) {
+    if (out) out.textContent = '❌ Fehler: ' + e.message;
+    showToast('❌ ' + e.message, 'error');
   }
 }
 
@@ -5512,13 +5628,14 @@ async function confirmRechnungScan() {
 
 // ──────────────── MILESTONES ────────────────
 function addMilestone() {
-  const editId = parseInt(document.getElementById('ms-edit-id')?.value) || null;
+  const editId = parseFloat(document.getElementById('ms-edit-id')?.value) || null;
   const item = {
     id: editId || Date.now(),
     name:  document.getElementById('ms-name').value || 'Meilenstein',
     datum: document.getElementById('ms-datum').value,
     text:  document.getElementById('ms-text').value,
-    done:  editId ? (state.meilensteine.find(m=>m.id===editId)?.done || false) : false
+    done:  editId ? (state.meilensteine.find(m=>m.id===editId)?.done || false) : false,
+    _updatedAt: Date.now()
   };
   if (editId) {
     const idx = state.meilensteine.findIndex(m => m.id === editId);
@@ -5547,12 +5664,13 @@ function editMilestone(id) {
 
 function toggleMilestone(id) {
   const m = state.meilensteine.find(m => m.id === id);
-  if (m) { m.done = !m.done; showToast(m.done ? '✅ Meilenstein abgehakt' : '↩️ Meilenstein wieder offen', 'success'); }
+  if (m) { m.done = !m.done; m._updatedAt = Date.now(); showToast(m.done ? '✅ Meilenstein abgehakt' : '↩️ Meilenstein wieder offen', 'success'); }
   save(); renderMilestones();
 }
 
 function deleteMilestone(id) {
   if (!confirm('Meilenstein löschen?')) return;
+  _trackDeletion(id, 'meilensteine');
   state.meilensteine = state.meilensteine.filter(m => m.id !== id);
   save(); renderMilestones(); showToast('🗑 Meilenstein gelöscht', 'success');
 }
@@ -5692,11 +5810,12 @@ function importKIZeitplan() {
   const ganttList = document.getElementById('ki-gantt-list');
 
   // Import milestones
+  const _msBase = Date.now();
   (_kiZeitplanData.meilensteine||[]).forEach((m, i) => {
     const nameEl  = msList.querySelector(`[data-ki-ms-name="${i}"]`);
     const datumEl = msList.querySelector(`[data-ki-ms-datum="${i}"]`);
     state.meilensteine.push({
-      id:    Date.now() + Math.random(),
+      id:    _msBase + i,
       name:  nameEl?.value  || m.name,
       datum: datumEl?.value || m.datum,
       text:  m.text || '',
@@ -5705,12 +5824,13 @@ function importKIZeitplan() {
   });
 
   // Import gantt phases
+  const _ganttBase = Date.now() + 10000;
   (_kiZeitplanData.phasen||[]).forEach((p, i) => {
     const nameEl  = ganttList.querySelector(`[data-ki-gantt-name="${i}"]`);
     const startEl = ganttList.querySelector(`[data-ki-gantt-start="${i}"]`);
     const endEl   = ganttList.querySelector(`[data-ki-gantt-end="${i}"]`);
     state.gantt.push({
-      id:     Date.now() + Math.random(),
+      id:     _ganttBase + i,
       name:   nameEl?.value  || p.name,
       start:  startEl?.value || p.start,
       end:    endEl?.value   || p.end,
@@ -5896,6 +6016,7 @@ function toggleTask(id) {
 
 function deleteTask(id) {
   if (!confirm('Aufgabe löschen?')) return;
+  _trackDeletion(id, 'aufgaben');
   // Remove synced notiz
   state.notizen = state.notizen.filter(n => n.__taskId !== id);
   state.aufgaben = state.aufgaben.filter(t => t.id !== id);
@@ -6122,6 +6243,7 @@ function editDiary(id) {
 
 function deleteDiary(id) {
   if (!confirm('Eintrag löschen?')) return;
+  _trackDeletion(id, 'tagebuch');
   state.tagebuch = state.tagebuch.filter(e => e.id !== id);
   save(); renderDiary();
   showToast('🗑 Eintrag gelöscht', 'success');
@@ -6392,6 +6514,7 @@ function editNotiz(id) {
 
 function deleteNotiz(id) {
   if (!confirm('Notiz löschen?')) return;
+  _trackDeletion(id, 'notizen');
   state.notizen = state.notizen.filter(n => n.id !== id);
   save(); renderNotizen();
   showToast('🗑 Notiz gelöscht', 'success');
@@ -6664,6 +6787,7 @@ function editKontakt(id) {
 
 function deleteKontakt(id) {
   if (!confirm('Kontakt löschen?')) return;
+  _trackDeletion(id, 'kontakte');
   const k = state.kontakte.find(k => k.id === id);
   if (k && k.firma) {
     (state.angebote||[]).forEach(a => { if (a.anbieter === k.firma) a.anbieter = ''; });
@@ -6745,6 +6869,7 @@ function editGanttItem(id) {
 
 function deleteGanttItem(id) {
   if (!confirm('Eintrag löschen?')) return;
+  _trackDeletion(id, 'gantt');
   state.gantt = state.gantt.filter(g => g.id !== id);
   save(); renderGantt();
   showToast('🗑 Phase gelöscht', 'success');
@@ -7833,6 +7958,7 @@ function editDoku(id) {
 
 function deleteDoku(id) {
   if (!confirm('Eintrag löschen?')) return;
+  _trackDeletion(id, 'dokumentation');
   state.dokumentation = state.dokumentation.filter(d => d.id !== id);
   save(); renderDoku();
   showToast('🗑 Dokumentation gelöscht', 'success');
@@ -7956,6 +8082,7 @@ function editWartung(id) {
 
 function deleteWartung(id) {
   if (!confirm('Wartung löschen?')) return;
+  _trackDeletion(id, 'wartungen');
   state.wartungen = state.wartungen.filter(w => w.id !== id);
   save(); renderWartung();
   showToast('🗑 Wartung gelöscht', 'success');
@@ -8658,12 +8785,19 @@ function _saveLocalBackup(projectsData) {
 // Merge two item arrays by id.
 // If both versions have _updatedAt → newer wins entirely.
 // If no timestamps → local fills empty cloud fields (safe fallback).
-function _mergeArr(local = [], cloud = []) {
-  const cloudMap = new Map((cloud || []).map(i => [i.id, i]));
-  const localMap = new Map((local || []).map(i => [i.id, i]));
+// deletedIds = merged tombstone map {id: deletedAtTs} — deleted items are never re-added.
+function _mergeArr(local = [], cloud = [], deletedIds = {}) {
+  const isDeleted = (id) => {
+    const delTs = deletedIds[String(id)];
+    if (!delTs) return false;
+    return true; // tombstone exists → item was deleted on some device
+  };
+  const cloudMap = new Map((cloud || []).map(i => [String(i.id), i]));
+  const localMap = new Map((local || []).map(i => [String(i.id), i]));
   const result = [];
   for (const cItem of (cloud || [])) {
-    const lItem = localMap.get(cItem.id);
+    if (isDeleted(cItem.id)) continue; // deleted → skip
+    const lItem = localMap.get(String(cItem.id));
     if (lItem) {
       const cTime = cItem._updatedAt || 0;
       const lTime = lItem._updatedAt || 0;
@@ -8685,9 +8819,11 @@ function _mergeArr(local = [], cloud = []) {
       result.push(cItem);
     }
   }
-  // Add local-only items not in cloud
+  // Add local-only items not in cloud — but skip tombstoned items
   for (const item of (local || [])) {
-    if (item?.id !== undefined && !cloudMap.has(item.id)) result.push(item);
+    if (item?.id !== undefined && !cloudMap.has(String(item.id)) && !isDeleted(item.id)) {
+      result.push(item);
+    }
   }
   return result;
 }
@@ -8697,14 +8833,20 @@ function _mergeProjects(localProjects, cloudProjects) {
   if (!Array.isArray(cloudProjects) || cloudProjects.length === 0) return localProjects || [];
   if (!Array.isArray(localProjects) || localProjects.length === 0) return cloudProjects;
   const ARRS = ['kosten','aufgaben','dokumentation','budgetKat','notizen','maengel',
-                'angebote','zahlungsplan','kontakte','gewerke','personen','dokumente','fotos'];
+                'angebote','zahlungsplan','kontakte','gewerke','personen','dokumente','fotos',
+                'meilensteine','gantt','abhaengigkeiten','wartungen','tagebuch'];
   const result = cloudProjects.map(cp => {
     const lp = localProjects.find(p => p.id === cp.id);
     if (!lp) return cp;
-    const merged = { ...cp };
+    // Merge tombstone maps: union of both, keep the latest deletion timestamp per id
+    const mergedDeleted = { ...(cp._deletedIds || {}) };
+    for (const [id, ts] of Object.entries(lp._deletedIds || {})) {
+      if (!mergedDeleted[id] || ts > mergedDeleted[id]) mergedDeleted[id] = ts;
+    }
+    const merged = { ...cp, _deletedIds: mergedDeleted };
     for (const f of ARRS) {
       if (Array.isArray(lp[f]) || Array.isArray(cp[f])) {
-        merged[f] = _mergeArr(lp[f], cp[f]);
+        merged[f] = _mergeArr(lp[f], cp[f], mergedDeleted);
       }
     }
     return merged;
@@ -8718,20 +8860,27 @@ function _mergeProjects(localProjects, cloudProjects) {
 
 // ── Supabase Realtime ──────────────────────────────────────────────────────────
 let _realtimeChannel = null;
-let _realtimeLoading = false; // prevents reload loop when we sync back after merge
+let _realtimeLoading = false;  // prevents re-entry loop in the realtime handler
+let _realtimeGuard   = 0;      // counter: realtime is blocked while > 0 (multiple ops can overlap)
+
+// Increment the guard for `ms` milliseconds.
+// Use this instead of bare setTimeout(false) so overlapping operations don't
+// prematurely unblock realtime before all operations have settled.
+function _holdRealtime(ms = 2000) {
+  _realtimeGuard++;
+  setTimeout(() => { _realtimeGuard = Math.max(0, _realtimeGuard - 1); }, ms);
+}
 function _setupRealtimeSync() {
   if (!currentUser) return;
   if (_realtimeChannel) { supa.removeChannel(_realtimeChannel); _realtimeChannel = null; }
   _realtimeChannel = supa
     .channel('proj-' + currentUser.id)
     .on('postgres_changes', {
-      event: 'UPDATE', schema: 'public', table: 'projektdaten',
+      event: '*', schema: 'public', table: 'projekt_items',
       filter: 'user_id=eq.' + currentUser.id
     }, () => {
-      if (_realtimeLoading) return; // avoid loop when we ourselves triggered the update
+      if (_realtimeLoading || _realtimeGuard > 0) return; // blocked by our own operations
       _realtimeLoading = true;
-      // NOTE: do NOT cancel syncTimeout here — local changes (e.g. time field)
-      // must still reach the cloud even when a realtime event fires simultaneously
       loadFromCloud().then(() => {
         applyModuleVisibility();
         const active = document.querySelector('.page.active');
@@ -8748,85 +8897,114 @@ function _setupRealtimeSync() {
           else if (pid === 'maengel') renderMaengel();
           else if (pid === 'fotos') renderFotos();
           else if (pid === 'zeitplan') renderZeitplan?.();
+          else if (pid === 'planung') { renderMilestones?.(); renderGantt?.(); }
         }
-        setTimeout(() => { _realtimeLoading = false; }, 2000); // cooldown
+        _holdRealtime(2000); // block cascade from our own load triggering another load
+        _realtimeLoading = false;
       });
     })
     .subscribe();
 }
 
-// ── Cloud sync ─────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// SYNC v2 — per-item rows in projekt_items + metadata in projektdaten
+// Each item (Kosten, Aufgabe, Meilenstein …) is ONE row in Supabase.
+// Deletions are hard-deleted immediately. No merge conflicts possible.
+// ══════════════════════════════════════════════════════════════════
+
 async function syncToCloud() {
   if (!currentUser) return;
+  // Block realtime from triggering a reload while we're syncing our own changes
+  _realtimeLoading = true;
+  _holdRealtime(500); // immediate guard while we work
   try {
     const idx = projects.findIndex(p => p.id === currentProjectId);
     if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
 
-    // Safety check: never sync empty/blank state to cloud
-    const hasRealData = projects.some(p =>
-      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
-      (p.budgetKat?.length > 0) || (p.notizen?.length > 0)
-    );
-
-    // Save local rolling backup BEFORE syncing (only if data is real)
+    const hasRealData = projects.some(p => ITEM_TYPES.some(t => (p[t]?.length || 0) > 0));
     if (hasRealData) _saveLocalBackup(projects);
 
     const ts = new Date().toISOString();
     localStorage.setItem('bauplan_updated_at', ts);
 
-    // Check if row exists — fetch current cloud data to MERGE before overwriting
-    const { data: existing } = await supa.from('projektdaten')
-      .select('id, daten').eq('user_id', currentUser.id).maybeSingle();
-
-    // Safety: if cloud has real data but we're about to sync empty → ABORT
-    const cloudHasData = existing?.daten?.projects?.some(p =>
-      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
-      (p.budgetKat?.length > 0) || (p.notizen?.length > 0)
-    );
-    if (cloudHasData && !hasRealData) {
-      console.warn('syncToCloud aborted: would overwrite cloud data with empty state');
-      setSyncStatus('err');
-      _showRecoveryBanner();
-      return;
+    // ── 1. Hard-delete tombstoned items FIRST ──────────────────────
+    // Must happen before upsert so realtime sees clean state when it fires
+    for (const proj of projects) {
+      const deletedIds = Object.keys(proj._deletedIds || {});
+      if (deletedIds.length > 0) {
+        for (let i = 0; i < deletedIds.length; i += 100) {
+          await supa.from('projekt_items')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('project_id', String(proj.id))
+            .in('item_id', deletedIds.slice(i, i + 100));
+        }
+      }
     }
 
-    // ── MERGE: combine local + cloud so no data from either device is lost ──
-    let finalProjects = projects;
-    if (existing?.daten?.projects && hasRealData) {
-      finalProjects = _mergeProjects(projects, existing.daten.projects);
-      projects = finalProjects;
-      // Also update in-memory state and localStorage with merged result
-      const merged = finalProjects.find(p => p.id === currentProjectId);
-      if (merged) { state = JSON.parse(JSON.stringify(merged)); }
-      localStorage.setItem('bauplan_projects', JSON.stringify(finalProjects));
+    // ── 2. Upsert remaining items into projekt_items ────────────────
+    const rows = [];
+    for (const proj of projects) {
+      const pid = String(proj.id);
+      const deleted = proj._deletedIds || {};
+      for (const typ of ITEM_TYPES) {
+        for (const item of (proj[typ] || [])) {
+          if (item?.id == null) continue;
+          if (deleted[String(item.id)]) continue; // never re-upsert tombstoned items
+          rows.push({
+            user_id:    currentUser.id,
+            project_id: pid,
+            item_type:  typ,
+            item_id:    String(item.id),
+            payload:    item,
+            deleted:    false,
+            updated_at: item._updatedAt ? new Date(item._updatedAt).toISOString() : ts
+          });
+        }
+      }
     }
 
-    const payload = {
-      user_id: currentUser.id,
-      typ: 'all_projects',
-      daten: {
-        projects: finalProjects,
-        currentProjectId,
-        onboarded: true,
-        updated_at: ts,
-        prefs: { darkMode: document.body.classList.contains('dark-mode') }
-      },
-      updated_at: ts
+    // Batch upsert in chunks of 500
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await supa.from('projekt_items')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'user_id,project_id,item_type,item_id' });
+      if (error) throw error;
+    }
+
+    // ── 3. Save project metadata (settings, prefs) to projektdaten ─
+    const metaProjects = projects.map(p => ({
+      id: p.id,
+      settings: p.settings,
+      _deletedIds: p._deletedIds || {}
+    }));
+    const daten = {
+      projects: metaProjects,
+      currentProjectId,
+      onboarded: true,
+      updated_at: ts,
+      prefs: { darkMode: document.body.classList.contains('dark-mode') }
     };
 
+    const { data: existing } = await supa.from('projektdaten')
+      .select('id').eq('user_id', currentUser.id).maybeSingle();
     if (existing) {
-      const { error } = await supa.from('projektdaten').update({
-        daten: payload.daten, updated_at: payload.updated_at
-      }).eq('user_id', currentUser.id);
-      if (error) { console.error('Sync update error:', error.message); setSyncStatus('err'); return; }
+      const { error } = await supa.from('projektdaten')
+        .update({ daten, updated_at: ts }).eq('user_id', currentUser.id);
+      if (error) throw error;
     } else {
-      const { error } = await supa.from('projektdaten').insert(payload);
-      if (error) { console.error('Sync insert error:', error.message); setSyncStatus('err'); return; }
+      const { error } = await supa.from('projektdaten')
+        .insert({ user_id: currentUser.id, typ: 'all_projects', daten, updated_at: ts });
+      if (error) throw error;
     }
+
+    localStorage.setItem('bauplan_last_synced_at', ts);
     setSyncStatus('ok');
   } catch(e) {
     console.error('Sync error:', e.message);
     setSyncStatus('err');
+  } finally {
+    _holdRealtime(2000); // block realtime for 2 s after sync so our own events don't reload
+    _realtimeLoading = false;
   }
 }
 
@@ -8850,118 +9028,134 @@ function _loadFromLocalStorage() {
 
 async function loadFromCloud() {
   if (!currentUser) return null;
-  // ?nocloud=1 → skip all cloud operations (safe recovery mode)
   if (new URLSearchParams(location.search).get('nocloud') === '1') {
-    _loadFromLocalStorage();
-    return null;
+    _loadFromLocalStorage(); return null;
   }
   try {
-    const { data, error } = await supa.from('projektdaten')
-      .select('daten')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
+    // ── Load metadata + items in parallel ──────────────────────────
+    const [metaResult, itemsResult] = await Promise.all([
+      supa.from('projektdaten').select('daten').eq('user_id', currentUser.id).maybeSingle(),
+      supa.from('projekt_items').select('project_id,item_type,item_id,payload,updated_at')
+           .eq('user_id', currentUser.id).eq('deleted', false)
+           .order('updated_at', { ascending: true })  // stable insertion order
+    ]);
 
-    if (error) {
-      console.error('Load error:', error.message);
-      _loadFromLocalStorage();
-      return null;
+    if (metaResult.error) { _loadFromLocalStorage(); return null; }
+
+    const cloudMeta    = metaResult.data?.daten;
+    const itemRows     = itemsResult.data || [];
+    const itemsHaveData = itemRows.length > 0;
+
+    // ── Migration: first run after update ──────────────────────────
+    // Old format: projektdaten.daten.projects had full arrays.
+    // Detect by: no rows in projekt_items but projektdaten has items.
+    const oldFormatHasItems = !itemsHaveData && cloudMeta?.projects?.some(p =>
+      ITEM_TYPES.some(t => (p[t]?.length || 0) > 0)
+    );
+    if (oldFormatHasItems) {
+      console.log('Migrating from old format to projekt_items…');
+      // Push old items to projekt_items via a sync, then reload
+      const oldProjects = cloudMeta.projects;
+      oldProjects.forEach(_deduplicateProject); // clean before migrating
+      projects = oldProjects;
+      const curId = cloudMeta.currentProjectId || oldProjects[0]?.id;
+      currentProjectId = curId;
+      state = projects.find(p => p.id === curId) || EMPTY_PROJECT();
+      localStorage.setItem('bauplan_projects', JSON.stringify(projects));
+      localStorage.setItem('bauplan_current', String(currentProjectId));
+      localStorage.setItem('bauplan_user_id', currentUser.id);
+      await syncToCloud(); // this pushes items to projekt_items
+      return loadFromCloud(); // reload fresh from new format
     }
 
-    // A projects array counts as "has data" if any project has a real name OR any content.
-    // This correctly handles: new users (named project, no entries yet) AND returning users.
+    // ── Reconstruct projects from item rows ────────────────────────
     const _hasData = (arr) => Array.isArray(arr) && arr.length > 0 && arr.some(p =>
-      (p.settings?.name && p.settings.name !== 'Neues Projekt' && p.settings.name !== 'Mein erstes Projekt') ||
-      (p.kosten?.length > 0) || (p.aufgaben?.length > 0) || (p.dokumentation?.length > 0) ||
-      (p.budgetKat?.length > 0) || (p.notizen?.length > 0) || (p.maengel?.length > 0)
+      (p.settings?.name && p.settings.name !== 'Neues Projekt') ||
+      ITEM_TYPES.some(t => (p[t]?.length || 0) > 0)
     );
 
-    const cloudHasData = _hasData(data?.daten?.projects);
+    let finalProjects;
 
-    // ── CLOUD + LOCAL MERGE (cloud wins for conflicts, local adds missing items) ─
-    if (cloudHasData) {
+    if (cloudMeta?.projects?.length > 0) {
+      finalProjects = cloudMeta.projects.map(meta => {
+        const proj = { ...EMPTY_PROJECT(), ...meta };
+        const del  = proj._deletedIds || {};
+        ITEM_TYPES.forEach(t => { proj[t] = []; }); // clear arrays
+        itemRows.filter(r => r.project_id === String(meta.id)).forEach(r => {
+          if (!ITEM_TYPES.includes(r.item_type)) return;
+          if (del[r.item_id]) return; // skip items tombstoned on any device
+          proj[r.item_type].push(r.payload);
+        });
+        return proj;
+      });
+      // Add any projects that only appear in item rows (rare edge case)
+      const knownIds = new Set(cloudMeta.projects.map(p => String(p.id)));
+      const extraIds = [...new Set(itemRows.map(r => r.project_id))].filter(id => !knownIds.has(id));
+      for (const pid of extraIds) {
+        const proj = { ...EMPTY_PROJECT(), id: pid };
+        ITEM_TYPES.forEach(t => { proj[t] = []; });
+        itemRows.filter(r => r.project_id === pid).forEach(r => {
+          if (ITEM_TYPES.includes(r.item_type)) proj[r.item_type].push(r.payload);
+        });
+        finalProjects.push(proj);
+      }
+    } else if (itemsHaveData) {
+      // No metadata but have items → reconstruct minimal projects
+      const projectIds = [...new Set(itemRows.map(r => r.project_id))];
+      finalProjects = projectIds.map(pid => {
+        const proj = { ...EMPTY_PROJECT(), id: pid };
+        ITEM_TYPES.forEach(t => { proj[t] = []; });
+        itemRows.filter(r => r.project_id === pid).forEach(r => {
+          if (ITEM_TYPES.includes(r.item_type)) proj[r.item_type].push(r.payload);
+        });
+        return proj;
+      });
+    } else {
+      // ── Nothing in cloud ────────────────────────────────────────
       const localOwner    = localStorage.getItem('bauplan_user_id') || '';
       const rawLocal      = localStorage.getItem('bauplan_projects');
       const localProjects = rawLocal ? (() => { try { return JSON.parse(rawLocal); } catch(e) { return []; } })() : [];
-
-      // Merge: cloud is the base, local items not in cloud are added
-      let finalProjects = data.daten.projects;
-      if (localOwner === currentUser?.id && Array.isArray(localProjects) && localProjects.length > 0) {
-        finalProjects = _mergeProjects(localProjects, data.daten.projects);
+      const localHasData  = localOwner === currentUser?.id && _hasData(localProjects);
+      if (localHasData) {
+        _loadFromLocalStorage();
+        syncToCloud(); // push local to cloud
+        return null;
       }
-
-      projects = finalProjects;
-      const savedId = data.daten.currentProjectId;
-      const found = savedId && projects.find(p => p.id === savedId);
-      currentProjectId = found ? found.id : projects[0].id;
+      projects = [EMPTY_PROJECT()];
+      currentProjectId = projects[0].id;
       loadProject(currentProjectId, false);
-      const cloudTs = data?.daten?.updated_at || '';
-      localStorage.setItem('bauplan_projects',   JSON.stringify(finalProjects));
-      localStorage.setItem('bauplan_current',    String(currentProjectId));
-      localStorage.setItem('bauplan_user_id',    currentUser?.id || '');
-      localStorage.setItem('bauplan_updated_at', cloudTs);
-
-      // Apply cloud preferences (darkMode syncs across devices)
-      if (data.daten?.prefs?.darkMode !== undefined) {
-        const cloudDark = data.daten.prefs.darkMode;
-        const localDark = document.body.classList.contains('dark-mode');
-        if (cloudDark !== localDark) {
-          document.body.classList.toggle('dark-mode', cloudDark);
-          localStorage.setItem('darkMode', cloudDark ? '1' : '0');
-          _updateDarkModeToggle(cloudDark);
-        }
-      }
-
-      // If merge result differs from cloud (new items OR updated fields), sync back
-      const _fingerprint = (arr) => JSON.stringify(
-        (arr || []).map(p => ({
-          id: p.id,
-          aufgaben: (p.aufgaben||[]).map(t=>({id:t.id,time:t.time,status:t.status,datum:t.datum,name:t.name})),
-          kosten:   (p.kosten||[]).map(k=>k.id),
-          notizen:  (p.notizen||[]).map(n=>n.id),
-        }))
-      );
-      if (_fingerprint(finalProjects) !== _fingerprint(data.daten.projects)) {
-        clearTimeout(syncTimeout);
-        syncTimeout = setTimeout(syncToCloud, 800);
-      }
-
-      return data.daten;
-    }
-
-    // ── CLOUD EMPTY → use local as fallback ────────────────────────────────────
-    const localOwner   = localStorage.getItem('bauplan_user_id') || '';
-    const localProjects = JSON.parse(localStorage.getItem('bauplan_projects') || '[]');
-    const localHasData  = localOwner === currentUser?.id && _hasData(localProjects);
-
-    if (localHasData) {
-      // Cloud is empty but local has real data → load local, then silently restore cloud.
-      // syncToCloud() has its own guard: it will never write empty data to a non-empty cloud.
-      console.log('Cloud empty, local has data – loading local and restoring cloud');
-      _loadFromLocalStorage();
-      syncToCloud();
       return null;
     }
 
-    // ── BOTH EMPTY ─────────────────────────────────────────────────────────────
-    if (data === null) {
-      // No DB row at all → genuine new user → onboarding will handle this
-      projects = [EMPTY_PROJECT()];
-      currentProjectId = projects[0].id;
-      loadProject(currentProjectId, false);
-    } else {
-      // DB row exists but empty + local empty → data was lost → show warning
-      console.warn('Data loss detected: DB row exists but both cloud and local are empty');
-      projects = [EMPTY_PROJECT()];
-      currentProjectId = projects[0].id;
-      loadProject(currentProjectId, false);
-      setTimeout(() => {
-        const banner = document.createElement('div');
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ef4444;color:#fff;padding:14px 16px;font-size:0.9rem;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.2)';
-        banner.innerHTML = '⚠️ <strong>Deine Daten konnten nicht geladen werden.</strong> Bitte wende dich an den Support oder öffne die App auf einem anderen Gerät mit <b>?nocloud=1</b>.';
-        document.body.prepend(banner);
-      }, 1000);
+    // ── Dedup all projects (remove duplicate budgetKat etc.) ───────
+    finalProjects.forEach(_deduplicateProject);
+
+    // ── Apply to app ───────────────────────────────────────────────
+    projects = finalProjects;
+    const savedId = cloudMeta?.currentProjectId;
+    const found   = savedId && projects.find(p => String(p.id) === String(savedId));
+    currentProjectId = found ? found.id : projects[0]?.id;
+    loadProject(currentProjectId, false);
+
+    const cloudTs = cloudMeta?.updated_at || new Date().toISOString();
+    localStorage.setItem('bauplan_projects',      JSON.stringify(projects));
+    localStorage.setItem('bauplan_current',       String(currentProjectId));
+    localStorage.setItem('bauplan_user_id',       currentUser.id);
+    localStorage.setItem('bauplan_updated_at',    cloudTs);
+    localStorage.setItem('bauplan_last_synced_at', cloudTs);
+
+    // Dark mode preference
+    if (cloudMeta?.prefs?.darkMode !== undefined) {
+      const cloudDark = cloudMeta.prefs.darkMode;
+      const localDark = document.body.classList.contains('dark-mode');
+      if (cloudDark !== localDark) {
+        document.body.classList.toggle('dark-mode', cloudDark);
+        localStorage.setItem('darkMode', cloudDark ? '1' : '0');
+        _updateDarkModeToggle(cloudDark);
+      }
     }
-    return null;
+
+    return cloudMeta;
 
   } catch(e) {
     console.error('Load exception:', e.message);
@@ -9359,9 +9553,10 @@ async function finishOnboarding() {
   // Add budget categories from onboarding
   const total = parseFloat(document.getElementById('ob-budget-total').value) || 0;
   proj.settings.budget = total;
+  const _obBase = Date.now();
   proj.budgetKat = obBudgetCats
     .filter(c => c.name && (parseFloat(c.betrag)||0) > 0)
-    .map(c => ({ id: Date.now() + Math.random(), name: c.name, budget: parseFloat(c.betrag)||0 }));
+    .map((c, i) => ({ id: _obBase + i, name: c.name, budget: parseFloat(c.betrag)||0, color: c.color || BG_COLORS[i % BG_COLORS.length] }));
 
   projects = [proj];
   currentProjectId = proj.id;
@@ -9397,6 +9592,7 @@ function addAbhBlock() {
 }
 
 function deleteAbhBlock(id) {
+  _trackDeletion(id, 'abhaengigkeiten');
   state.abhaengigkeiten = (state.abhaengigkeiten||[]).filter(b => b.id !== id);
   save(); renderAbhaengigkeiten();
   showToast('🗑 Abhängigkeit gelöscht', 'success');
@@ -9430,7 +9626,7 @@ function renderAbhaengigkeiten() {
   const statusColors = {
     'Erledigt':  { bg:'var(--success-light)', border:'#bbf7d0', text:'var(--success)', dot:'#22c55e' },
     'In Arbeit': { bg:'var(--warning-light)', border:'#fde68a', text:'var(--warning)', dot:'#f59e0b' },
-    'Offen':     { bg:'white',                border:'var(--border)', text:'var(--text2)', dot:'#94a3b8' }
+    'Offen':     { bg:'var(--surface)',        border:'var(--border)', text:'var(--text2)', dot:'#94a3b8' }
   };
 
   el.innerHTML = `
@@ -9573,6 +9769,7 @@ function editAngebot(id) {
 
 function deleteAngebot(id) {
   if (!confirm('Angebot löschen?')) return;
+  _trackDeletion(id, 'angebote');
   state.angebote = (state.angebote||[]).filter(a => a.id !== id);
   save(); renderAngebote();
   showToast('🗑 Angebot gelöscht', 'success');
@@ -9872,6 +10069,7 @@ function editZahlung(id) {
 
 function deleteZahlung(id) {
   if (!confirm('Zahlung löschen?')) return;
+  _trackDeletion(id, 'zahlungen');
   state.zahlungen = (state.zahlungen||[]).filter(z => z.id !== id);
   save(); renderZahlungsplan();
   showToast('🗑 Zahlung gelöscht', 'success');
@@ -10037,6 +10235,7 @@ function editMangel(id) {
 
 function deleteMangel(id) {
   if (!confirm('Mangel löschen?')) return;
+  _trackDeletion(id, 'maengel');
   state.maengel = (state.maengel||[]).filter(m => m.id !== id);
   save(); renderMaengel();
   showToast('🗑 Mangel gelöscht', 'success');
@@ -10246,6 +10445,7 @@ function addZahlungsPerson() {
 
 function deleteZahlungsPerson(id) {
   if (!confirm('Person löschen? Bestehende Zuweisungen in Rechnungen werden entfernt.')) return;
+  _trackDeletion(id, 'zahlungspersonen');
   const person = (state.zahlungspersonen||[]).find(p => p.id === id);
   if (person) state.kosten.forEach(k => { if (k.bezahltVon === person.name) k.bezahltVon = ''; });
   state.zahlungspersonen = (state.zahlungspersonen||[]).filter(p => p.id !== id);
