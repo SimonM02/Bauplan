@@ -3836,6 +3836,11 @@ function saveAll() {
                         'kontakte','dokumentation','meilensteine','wartungen','tagebuch'];
   STAMP_FIELDS.forEach(f => { if (Array.isArray(state[f])) state[f] = _stampUpdatedAt(state[f]); });
 
+  // Stamp _order on budgetKat so position survives cloud sync & multi-device reload
+  if (Array.isArray(state.budgetKat)) {
+    state.budgetKat.forEach((k, i) => { k._order = i; });
+  }
+
   const idx = projects.findIndex(p => p.id === currentProjectId);
   if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
   const ts = new Date().toISOString();
@@ -3899,8 +3904,10 @@ function _deduplicateProject(proj) {
       if (!k?.name || seen.has(k.name)) removed.push(k);
       else { seen.add(k.name); kept.push(k); }
     }
+    // Always apply sorted kept list (preserves user-defined drag order)
+    proj.budgetKat = kept.sort((a, b) => (a._order ?? 9999) - (b._order ?? 9999));
+
     if (removed.length > 0) {
-      proj.budgetKat = kept;
       // Tombstone so syncToCloud also hard-deletes them
       proj._deletedIds = proj._deletedIds || {};
       removed.forEach(k => {
@@ -4904,11 +4911,20 @@ function editBudgetKat(id) {
   openModal('modal-budget-kat');
 }
 
-function deleteBudgetKat(id) {
+async function deleteBudgetKat(id) {
   if (!confirm('Kategorie löschen?')) return;
   _trackDeletion(id, 'budgetKat');
   state.budgetKat = state.budgetKat.filter(k => k.id !== id);
-  save(); renderBudget(); showToast('🗑 Kategorie gelöscht', 'success');
+  renderBudget();
+  showToast('🗑 Kategorie gelöscht', 'success');
+  // Update localStorage + projects array immediately
+  const idx = projects.findIndex(p => p.id === currentProjectId);
+  if (idx > -1) projects[idx] = { ...state, id: currentProjectId };
+  localStorage.setItem('bauplan_projects', JSON.stringify(projects));
+  // Cancel any pending debounced sync and run immediately
+  // so tombstone reaches projektdaten BEFORE Realtime can fire a reload
+  clearTimeout(syncTimeout);
+  await syncToCloud();
 }
 
 const BG_COLORS = ['#3d6ff8','#7b5cfa','#0d9488','#ea6c19','#ef4444','#f59e0b','#22c55e','#e879f9','#06b6d4','#84cc16'];
