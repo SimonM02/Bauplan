@@ -2195,67 +2195,6 @@
       </div>
     </div>
 
-    <!-- KI-BAUBERATER PANEL -->
-    <div id="ki-advisor-panel" style="margin-bottom:28px;border-radius:16px;overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow-md)">
-      <!-- Header -->
-      <div style="background:#0f172a;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;border:1px solid rgba(255,255,255,0.12)">🤖</div>
-          <div>
-            <div style="color:white;font-weight:600;font-size:0.875rem">KI-Bauberater</div>
-            <div style="color:rgba(255,255,255,0.45);font-size:0.68rem;font-family:'JetBrains Mono',monospace" id="ki-last-update">Noch nicht analysiert</div>
-          </div>
-        </div>
-        <button onclick="runKIAnalysis()" id="ki-analyze-btn"
-          style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);padding:6px 14px;border-radius:6px;font-family:'Inter',sans-serif;font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.12s"
-          onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
-          Analysieren
-        </button>
-      </div>
-
-      <!-- Loading state -->
-      <div id="ki-loading" style="display:none;background:var(--surface);padding:28px;text-align:center">
-        <div style="font-size:2rem;margin-bottom:10px;animation:spin 1.2s linear infinite;display:inline-block">⚙️</div>
-        <div style="font-weight:700;color:var(--text);margin-bottom:4px">Projekt wird analysiert…</div>
-        <div style="font-size:0.82rem;color:var(--text3)">KI liest alle Daten, Kosten, Fortschritt und Wartungen</div>
-      </div>
-
-      <!-- Empty state -->
-      <div id="ki-empty" style="background:var(--surface);padding:24px 24px 20px">
-        <div style="display:flex;gap:10px;align-items:center;padding:14px 16px;background:var(--accent-light);border-radius:11px;border:1.5px dashed var(--accent)">
-          <span style="font-size:1.2rem">💡</span>
-          <span style="font-size:0.85rem;color:var(--accent);font-weight:600">Klicke „Jetzt analysieren" – der KI-Bauberater prüft dein gesamtes Projekt und gibt dir konkrete Handlungsempfehlungen.</span>
-        </div>
-      </div>
-
-      <!-- Results -->
-      <div id="ki-results" style="display:none;background:var(--surface)">
-        <!-- Alert bar (urgent warnings) -->
-        <div id="ki-alerts" style="border-bottom:1px solid var(--border)"></div>
-        <!-- Insight cards -->
-        <div id="ki-insights" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px"></div>
-        <!-- Chat input -->
-        <div style="border-top:1px solid var(--border);padding:16px 24px;display:flex;gap:10px;align-items:flex-end">
-          <div style="flex:1">
-            <div style="font-size:0.72rem;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Frage an den Bauberater</div>
-            <div style="display:flex;gap:8px">
-              <input id="ki-chat-input" type="text" placeholder="z.B. Werde ich mein Budget einhalten? Was sollte ich als nächstes tun?"
-                style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;color:var(--text);padding:9px 13px;font-family:'Inter',sans-serif;font-size:0.875rem;outline:none;transition:all 0.15s"
-                onfocus="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(61,111,248,0.1)'"
-                onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'"
-                onkeydown="if(event.key==='Enter')askKI()">
-              <button onclick="askKI()" id="ki-ask-btn"
-                style="background:var(--accent);color:white;border:none;padding:9px 18px;border-radius:9px;font-family:'Inter',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(61,111,248,0.3);white-space:nowrap">
-                Fragen →
-              </button>
-            </div>
-          </div>
-        </div>
-        <!-- Chat answer -->
-        <div id="ki-chat-answer" style="display:none;margin:0 24px 20px;background:var(--surface2);border-radius:11px;padding:14px 16px;font-size:0.875rem;color:var(--text);line-height:1.65;border:1.5px solid var(--border)"></div>
-      </div>
-    </div>
-
     <div class="cards-grid" id="dash-cards">
       <div class="card">
         <div class="card-label">Gesamtbudget</div>
@@ -2305,6 +2244,68 @@
         </table>
       </div>
     </div>
+
+    <!-- KI-BAUBERATER PANEL -->
+    <div id="ki-advisor-panel" style="margin-top:28px;border-radius:16px;overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow-md)">
+      <!-- Header -->
+      <div style="background:#0f172a;padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;border:1px solid rgba(255,255,255,0.12)">🤖</div>
+          <div>
+            <div style="color:white;font-weight:600;font-size:0.875rem">KI-Bauberater</div>
+            <div style="color:rgba(255,255,255,0.45);font-size:0.68rem;font-family:'JetBrains Mono',monospace" id="ki-last-update">Noch nicht analysiert</div>
+          </div>
+        </div>
+        <button onclick="runKIAnalysis()" id="ki-analyze-btn"
+          style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);padding:6px 14px;border-radius:6px;font-family:'Inter',sans-serif;font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.12s"
+          onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
+          Analysieren
+        </button>
+      </div>
+
+      <!-- Loading state -->
+      <div id="ki-loading" style="display:none;background:var(--surface);padding:28px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:10px;animation:spin 1.2s linear infinite;display:inline-block">⚙️</div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:4px">Projekt wird analysiert…</div>
+        <div style="font-size:0.82rem;color:var(--text3)">KI liest alle Daten, Kosten, Fortschritt und Wartungen</div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="ki-empty" style="background:var(--surface);padding:24px 24px 20px">
+        <div style="display:flex;gap:10px;align-items:center;padding:14px 16px;background:var(--accent-light);border-radius:11px;border:1.5px dashed var(--accent)">
+          <span style="font-size:1.2rem">💡</span>
+          <span style="font-size:0.85rem;color:var(--accent);font-weight:600">Klicke „Analysieren" – der KI-Bauberater prüft dein gesamtes Projekt und gibt dir konkrete Handlungsempfehlungen.</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="ki-results" style="display:none;background:var(--surface)">
+        <!-- Alert bar (urgent warnings) -->
+        <div id="ki-alerts" style="border-bottom:1px solid var(--border)"></div>
+        <!-- Insight cards -->
+        <div id="ki-insights" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px"></div>
+        <!-- Chat input -->
+        <div style="border-top:1px solid var(--border);padding:16px 24px;display:flex;gap:10px;align-items:flex-end">
+          <div style="flex:1">
+            <div style="font-size:0.72rem;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Frage an den Bauberater</div>
+            <div style="display:flex;gap:8px">
+              <input id="ki-chat-input" type="text" placeholder="z.B. Werde ich mein Budget einhalten? Was sollte ich als nächstes tun?"
+                style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;color:var(--text);padding:9px 13px;font-family:'Inter',sans-serif;font-size:0.875rem;outline:none;transition:all 0.15s"
+                onfocus="this.style.borderColor='var(--accent)';this.style.boxShadow='0 0 0 3px rgba(61,111,248,0.1)'"
+                onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'"
+                onkeydown="if(event.key==='Enter')askKI()">
+              <button onclick="askKI()" id="ki-ask-btn"
+                style="background:var(--accent);color:white;border:none;padding:9px 18px;border-radius:9px;font-family:'Inter',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(61,111,248,0.3);white-space:nowrap">
+                Fragen →
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Chat answer -->
+        <div id="ki-chat-answer" style="display:none;margin:0 24px 20px;background:var(--surface2);border-radius:11px;padding:14px 16px;font-size:0.875rem;color:var(--text);line-height:1.65;border:1.5px solid var(--border)"></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- KOSTENVERFOLGUNG -->
