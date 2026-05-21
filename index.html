@@ -9521,7 +9521,8 @@ let _demoMode = false;
 function startDemo() {
   _demoMode = true;
   currentUser = null;
-  hideAuthOverlay();
+  document.getElementById('auth-splash')?.remove();
+  document.getElementById('auth-overlay').style.display = 'none';
 
   // Show banner (push sidebar & main down by banner height)
   const banner = document.getElementById('demo-banner');
@@ -11401,6 +11402,12 @@ function renderKostenaufteilung() {
     updateProjectHeader();
     applyModuleVisibility();
     renderDashboard();
+    return;
+  }
+
+  // Demo mode: start immediately if secret URL param is present
+  if (new URLSearchParams(location.search).get('demo') === 'buildora2025') {
+    startDemo();
     return;
   }
 
